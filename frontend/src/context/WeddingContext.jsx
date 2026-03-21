@@ -126,7 +126,7 @@ export const WEDDING_TYPES = [
   { id: "Islam",     imageUrl: "https://images.unsplash.com/photo-1591604466107-ec97de577aff?w=400&q=80", emoji: "☪️",  label: "Islamic Wedding" },
   { id: "Sikh",      imageUrl: "https://images.unsplash.com/photo-1607197399756-51e3de7a5d96?w=400&q=80", emoji: "🏯", label: "Sikh Wedding" },
   { id: "Christian", imageUrl: "https://images.unsplash.com/photo-1523438885200-e635ba2c371e?w=400&q=80", emoji: "⛪",  label: "Christian Wedding" },
-  { id: "Buddhist",  imageUrl: "https://images.unsplash.com/photo-1545389336-cf090694435e?w=400&q=80", emoji: "☸️",  label: "Buddhist Wedding" },
+  { id: "Buddhist",  imageUrl: "https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=400&q=80", emoji: "☸️",  label: "Buddhist Wedding" },
   { id: "Jain",      imageUrl: "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=400&q=80", emoji: "🕊️",  label: "Jain Wedding" },
   { id: "Generic",   imageUrl: "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=400&q=80", emoji: "✨",  label: "Generic / Mixed" },
 ]

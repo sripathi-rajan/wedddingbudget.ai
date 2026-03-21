@@ -452,13 +452,43 @@ export function Tab7Logistics() {
                   <label style={{ fontSize: 12, fontWeight: 600, color: C.primary, display: 'block', marginBottom: 4 }}>
                     Distance (km)
                   </label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <input type="number" min={0}
                       value={wedding[distKey] || ''}
                       placeholder="Enter km"
                       onChange={e => update(distKey, parseInt(e.target.value) || 0)}
                       style={{ width: 90, padding: '6px 10px', border: `1.5px solid ${C.sky}`,
                         borderRadius: 8, fontSize: 13, fontFamily: 'Inter,sans-serif' }} />
+                    <button onClick={async (e) => {
+                      const btn = e.currentTarget
+                      const from = cityLabel
+                      const to = district
+                      if (!from || !to) { alert('Set ' + role + '\'s city and wedding district first'); return }
+                      btn.textContent = '...'
+                      btn.disabled = true
+                      try {
+                        const [oRes, dRes] = await Promise.all([
+                          fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(from + ', India') + '&format=json&limit=1'),
+                          fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(to + ', India') + '&format=json&limit=1')
+                        ])
+                        const [oData, dData] = await Promise.all([oRes.json(), dRes.json()])
+                        if (!oData[0] || !dData[0]) { alert('City not found. Try full name e.g. Chennai, Tamil Nadu'); btn.textContent = '📍 Get km'; btn.disabled = false; return }
+                        const routeRes = await fetch('https://router.project-osrm.org/route/v1/driving/' + oData[0].lon + ',' + oData[0].lat + ';' + dData[0].lon + ',' + dData[0].lat + '?overview=false')
+                        const routeData = await routeRes.json()
+                        const km = Math.round(routeData.routes[0].distance / 1000)
+                        update(distKey, km)
+                        btn.textContent = km + ' km ✓'
+                        setTimeout(() => { btn.textContent = '📍 Get km'; btn.disabled = false }, 3000)
+                      } catch {
+                        alert('Auto-fetch failed. Enter km manually.')
+                        btn.textContent = '📍 Get km'
+                        btn.disabled = false
+                      }
+                    }} style={{ padding: '5px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: `1.5px solid ${C.sky}`, background: 'white', color: C.blue,
+                      cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      📍 Get km
+                    </button>
                     {mapsUrl && (
                       <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
                         style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none' }}>
