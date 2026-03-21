@@ -19,7 +19,7 @@ const DECOR_LIBRARY = [
   { id:13, imageUrl:'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=400&q=80', emoji:'👑', name:'Palace Chandelier Setup',   style:'Luxury',      complexity:'High',   base_cost:450000, function_type:'Ceiling' },
   { id:14, imageUrl:'https://images.unsplash.com/photo-1583939003579-730e3918a45a?w=400&q=80', emoji:'🌙', name:'Mehendi Decor Setup',       style:'Traditional', complexity:'Medium', base_cost:85000,  function_type:'Backdrop' },
   { id:15, imageUrl:'https://images.unsplash.com/photo-1595407753234-0882f1e77954?w=400&q=80', emoji:'💛', name:'Haldi Theme Decor',         style:'Playful',     complexity:'Low',    base_cost:35000,  function_type:'Entrance' },
-  { id:16, imageUrl:'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&q=80', emoji:'🎵', name:'Sangeet Stage Lights',      style:'Modern',      complexity:'High',   base_cost:180000, function_type:'Stage' },
+  { id:16, imageUrl:'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&q=80', emoji:'🎵', name:'Sangeet Stage Lights',      style:'Modern',      complexity:'High',   base_cost:180000, function_type:'Stage' },
 ]
 
 const COMPLEXITY_COLOR = { Low:'#059669', Medium:'#D97706', High:'#fb8500' }

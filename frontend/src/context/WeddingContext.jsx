@@ -114,7 +114,7 @@ export const ALL_EVENTS = [
   { id: "Engagement",           imageUrl: "https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=400&q=80", emoji: "💍", label: "Engagement" },
   { id: "Haldi",                imageUrl: "https://images.unsplash.com/photo-1595407753234-0882f1e77954?w=400&q=80", emoji: "🌼", label: "Haldi" },
   { id: "Mehendi",              imageUrl: "https://images.unsplash.com/photo-1583939003579-730e3918a45a?w=400&q=80", emoji: "🌿", label: "Mehendi" },
-  { id: "Sangeet",              imageUrl: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&q=80", emoji: "🎵", label: "Sangeet" },
+  { id: "Sangeet",              imageUrl: "https://images.unsplash.com/photo-1519741497674-611481863552?w=400&q=80", emoji: "🎵", label: "Sangeet" },
   { id: "Pre Wedding Cocktail", imageUrl: "https://images.unsplash.com/photo-1533777857889-4be7c70b33f7?w=400&q=80", emoji: "🥂", label: "Cocktail Party" },
   { id: "Wedding Day Ceremony", imageUrl: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400&q=80", emoji: "💒", label: "Wedding Ceremony" },
   { id: "Reception",            imageUrl: "https://images.unsplash.com/photo-1529636798458-92182e662485?w=400&q=80", emoji: "🎊", label: "Reception" },
