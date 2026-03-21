@@ -1,19 +1,31 @@
+import { useState } from 'react'
+
 export function ImageCard({ item, selected, onClick, showCost = false }) {
+  const [imgError, setImgError] = useState(false)
+
   return (
     <div
       className={`image-card ${selected ? 'selected' : ''}`}
       onClick={() => onClick(item.id)}
-      title={item.desc || item.label}
+      title={item.label}
     >
-      <div className="card-emoji">{item.emoji}</div>
+      {item.imageUrl && !imgError ? (
+        <img
+          src={item.imageUrl}
+          alt={item.label}
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div className="card-emoji">{item.emoji || '•'}</div>
+      )}
       <div className="card-label">{item.label}</div>
       {showCost && item.cost && (
-        <div style={{ fontSize: 11, color: '#C9A84C', fontWeight: 700, textAlign: 'center', paddingBottom: 6 }}>
+        <div style={{ fontSize: 11, color: 'var(--primary)', fontWeight: 700, textAlign: 'center', paddingBottom: 6 }}>
           {item.cost}
         </div>
       )}
-      {item.desc && !showCost && (
-        <div style={{ fontSize: 11, color: '#9A9A9A', textAlign: 'center', paddingBottom: 6 }}>
+      {showCost && item.desc && !item.cost && (
+        <div style={{ fontSize: 11, color: 'var(--primary)', fontWeight: 600, textAlign: 'center', paddingBottom: 6 }}>
           {item.desc}
         </div>
       )}

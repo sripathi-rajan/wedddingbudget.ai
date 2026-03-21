@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import wedding_config, budget, decor, food, artists, logistics, sundries, admin
 import uvicorn, os
 
-app = FastAPI(title="Shaadi.AI - Wedding Planner API", version="1.0.0")
+app = FastAPI(title="weddingbudget.AI - Wedding Planner API", version="1.0.0")
 
 # Allow any origin — Vercel frontend calls this Render backend
 app.add_middleware(
@@ -25,7 +25,7 @@ app.include_router(admin.router,          prefix="/api/admin",     tags=["Admin"
 
 @app.get("/")
 def root():
-    return {"message": "Shaadi.AI Backend Running!", "docs": "/docs", "version": "1.0.0"}
+    return {"message": "weddingbudget.AI Backend Running!", "docs": "/docs", "version": "1.0.0"}
 
 @app.get("/health")
 def health():

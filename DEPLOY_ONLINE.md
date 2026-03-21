@@ -48,8 +48,8 @@ Your Users (browser)
 cd shaadi-ai
 git init
 git add .
-git commit -m "Initial Shaadi.AI commit"
-git remote add origin https://github.com/YOUR_USERNAME/shaadi-ai.git
+git commit -m "Initial weddingbudget.ai commit"
+git remote add origin https://github.com/sripathi-rajan/weddingbudget.ai.git
 git push -u origin main
 ```
 

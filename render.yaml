@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: shaadi-ai-backend
+    name: weddingbudget-ai-backend
     runtime: python
     region: singapore
     plan: free

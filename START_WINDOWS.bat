@@ -1,7 +1,7 @@
 @echo off
 echo.
 echo  =========================================
-echo    SHAADI.AI — Wedding Planner Setup
+echo    weddingbudget.AI — Wedding Planner Setup
 echo  =========================================
 echo.
 
@@ -60,7 +60,7 @@ echo  ✅ Frontend packages installed
 
 echo.
 echo  =========================================
-echo   🚀 LAUNCHING SHAADI.AI
+echo   🚀 LAUNCHING weddingbudget.AI
 echo  =========================================
 echo.
 echo  Backend API  →  http://localhost:8000
@@ -70,14 +70,14 @@ echo  Press Ctrl+C to stop
 echo.
 
 :: Start backend in a new window
-start "Shaadi.AI Backend" cmd /k "cd /d %~dp0backend && python -m uvicorn main:app --reload --port 8000"
+start "weddingbudget.AI Backend" cmd /k "cd /d %~dp0backend && python -m uvicorn main:app --reload --port 8000"
 
 :: Give backend 3 seconds to start
 timeout /t 3 /nobreak >nul
 
 :: Start frontend
 cd ..\frontend
-start "Shaadi.AI Frontend" cmd /k "npm run dev"
+start "weddingbudget.AI Frontend" cmd /k "npm run dev"
 
 :: Open browser
 timeout /t 4 /nobreak >nul

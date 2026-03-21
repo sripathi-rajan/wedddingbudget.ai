@@ -26,6 +26,7 @@ class PredictRequest(BaseModel):
     style: str
     complexity: str
     image_seed: Optional[int] = 42
+    region: Optional[str] = "Pan-India"
 
 @router.get("/library")
 def get_library():
@@ -40,8 +41,9 @@ def get_library():
 def predict_decor_cost(req: PredictRequest):
     try:
         from ml.train import predict as ml_predict, find_similar
-        result = ml_predict(req.function_type, req.style, req.complexity, req.image_seed)
-        similar = find_similar(req.image_seed, top_k=3)
+        result = ml_predict(req.function_type, req.style, req.complexity,
+                            region=req.region, image_seed=req.image_seed)
+        similar = find_similar(req.image_seed, top_k=3, function_type=req.function_type)
         return {"predicted_cost": result["predicted_cost"], "range": result["range"],
                 "confidence": result["confidence"], "similar_items": similar, "source": "RandomForest ML"}
     except Exception:

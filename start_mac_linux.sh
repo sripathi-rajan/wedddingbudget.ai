@@ -2,7 +2,7 @@
 
 echo ""
 echo "  ========================================="
-echo "    SHAADI.AI — Wedding Planner Setup"
+echo "    weddingbudget.AI — Wedding Planner Setup"
 echo "  ========================================="
 echo ""
 
@@ -45,7 +45,7 @@ echo "  ✅ Frontend packages installed"
 
 echo ""
 echo "  ========================================="
-echo "   🚀 LAUNCHING SHAADI.AI"
+echo "   🚀 LAUNCHING weddingbudget.AI"
 echo "  ========================================="
 echo ""
 echo "  Backend API  →  http://localhost:8000"
@@ -78,7 +78,7 @@ elif command -v xdg-open &> /dev/null; then
 fi
 
 echo ""
-echo "  🎊 Shaadi.AI is running!"
+echo "  🎊 weddingbudget.AI is running!"
 echo "  Open http://localhost:3000 in your browser"
 echo ""
 echo "  To stop: Press Ctrl+C"
