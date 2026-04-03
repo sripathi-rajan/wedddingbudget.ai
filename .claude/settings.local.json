@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(find /c/Users/ELCOT/Downloads/shaadi-ai-deploy/shaadi-ai/decor_dataset -type f -name *.py -o -name *.json -o -name *.pkl -o -name *.pt -o -name *.h5)",
+      "Bash(ls -la /c/Users/ELCOT/Downloads/shaadi-ai-deploy/shaadi-ai/decor_dataset/data/images/*/)",
+      "Bash(grep -r \"import.*train\\\\|from.*train\\\\|from.*ml\" /c/Users/ELCOT/Downloads/shaadi-ai-deploy/shaadi-ai/backend --include=*.py)",
+      "Bash(ls -1 /c/Users/ELCOT/Downloads/shaadi-ai-deploy/shaadi-ai/decor_dataset/data/embeddings/*.npy)",
+      "Bash(python -c \":*)",
+      "Bash(wc -l /c/Users/ELCOT/Downloads/shaadi-ai-deploy/shaadi-ai/frontend/src/pages/*.jsx /c/Users/ELCOT/Downloads/shaadi-ai-deploy/shaadi-ai/frontend/src/components/*.jsx /c/Users/ELCOT/Downloads/shaadi-ai-deploy/shaadi-ai/frontend/src/context/WeddingContext.jsx)"
+    ]
+  }
+}

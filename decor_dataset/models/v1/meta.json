@@ -1,0 +1,20 @@
+{
+  "n_samples": 65,
+  "mae": 13661.52,
+  "trained_at": "2026-03-21T16:50:29",
+  "model_path": "C:\\Users\\ELCOT\\Downloads\\shaadi-ai-deploy\\shaadi-ai\\decor_dataset\\models\\v1\\cost_predictor.joblib",
+  "feature_dim": 136,
+  "func_types": [
+    "Mandap",
+    "Stage",
+    "Entrance",
+    "Floral",
+    "Reception",
+    "Table"
+  ],
+  "complexities": [
+    "Low",
+    "Medium",
+    "High"
+  ]
+}
