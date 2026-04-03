@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useWedding, SFX_ITEMS, formatRupees } from '../context/WeddingContext'
 import { MultiImageSelector } from '../components/ImageCard'
+import { scrollToNextSection } from '../utils/scrollToNext'
 
 const C = { primary: '#023047', amber: '#ffb703', blue: '#219ebc', light: '#e8f4fa', sky: '#8ecae6', orange: '#fb8500' }
 
@@ -58,7 +60,7 @@ export function Tab6Sundries() {
   return (
     <div>
       {/* Room Basket Tier */}
-      <div className="section-card">
+      <div className="section-card" data-section="sundries-main">
         <div className="section-title">🧺 Room Basket Tier</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
           {[
@@ -66,7 +68,7 @@ export function Tab6Sundries() {
             { id:'standard', emoji:'🌸', label:'Standard', rate:'₹800/room' },
             { id:'minimal',  emoji:'🌿', label:'Minimal',  rate:'₹300/room' },
           ].map(opt => (
-            <div key={opt.id} onClick={() => update('room_basket_budget', opt.id)}
+            <div key={opt.id} onClick={() => { update('room_basket_budget', opt.id); scrollToNextSection('sundries-main', 420) }}
               style={{ border:`2px solid ${wedding.room_basket_budget===opt.id ? C.amber : C.sky}`,
                 borderRadius:14, padding:18, textAlign:'center', cursor:'pointer',
                 background: wedding.room_basket_budget===opt.id ? '#fffbea' : 'white',
@@ -80,7 +82,7 @@ export function Tab6Sundries() {
       </div>
 
       {/* Sundries Table */}
-      <div className="section-card">
+      <div className="section-card" data-section="hampers">
         <div className="section-title">📋 Sundries — Editable</div>
         <div style={{ overflowX:'auto' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
@@ -155,6 +157,31 @@ export function Tab6Sundries() {
           </div>
         </div>
       </div>
+
+      {/* Sticky Next button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          position: 'sticky', bottom: '1.5rem',
+          display: 'flex', justifyContent: 'center',
+          zIndex: 50, marginTop: '2rem'
+        }}
+      >
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('weddingNextTab'))}
+          style={{
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: '10px',
+            padding: '14px 40px', fontSize: '15px',
+            fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'inherit',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
+          }}
+        >
+          Next: Logistics →
+        </button>
+      </motion.div>
     </div>
   )
 }
@@ -183,24 +210,21 @@ const TRAVEL_MODES = ['Air', 'Train', 'Car', 'Other']
 export function Tab7Logistics() {
   const { wedding, update } = useWedding()
 
-  const outstationGuests = wedding.outstation_guests || 0
-  const vehType = wedding.vehicle_type || 'Innova'
-  const veh = VEHICLE_CONFIG[vehType]
-  const sourceType = wedding.transfer_source_type || 'Airport'
-
-  // Thumb rule: 1 vehicle per N guests (default 3, admin configurable)
-  const guestsPerVehicle = wedding.guests_per_vehicle || 3
-
-  // Distance: use manual override or city average
   const district = wedding.wedding_district || ''
-  const autoDistance = CITY_AVG_DISTANCE[district] || 20
-  const distance = wedding.transfer_distance_km > 0 ? wedding.transfer_distance_km : autoDistance
+  const hasOutstation = wedding.has_outstation ?? null   // null = unanswered
+  const transportPct = wedding.transport_pct || 0
+  const totalGuests = wedding.total_guests || 0
+  const outstationGuests = hasOutstation ? Math.ceil(totalGuests * transportPct / 100) : 0
+  const transferCars = Math.ceil(outstationGuests / 3)
+  const transferCost = hasOutstation && transportPct > 0 ? transferCars * 4500 * 2 : 0
 
-  // Fleet calculation: ceil(guests / thumb-rule ratio)
-  const fleetSize = outstationGuests > 0 ? Math.ceil(outstationGuests / guestsPerVehicle) : 0
-  // 2 trips: pickup + dropoff
-  const costPerTrip = veh.base_fare + (distance * veh.per_km)
-  const transferCost = fleetSize * 2 * costPerTrip
+  // kept for breakup label only
+  const sourceType = wedding.transfer_source_type || 'Airport'
+  const vehType = wedding.vehicle_type || 'Innova'
+  const guestsPerVehicle = 3
+  const fleetSize = transferCars
+  const costPerTrip = 4500
+  const autoDistance = 20
 
   // Bride / Groom travel cost — auto-calculated from mode + distance
   const calcTravel = (mode, distKm) => {
@@ -235,175 +259,106 @@ export function Tab7Logistics() {
 
   return (
     <div>
-      {/* Transfer Source */}
-      <div className="section-card">
+      {/* Guest Transfer — 3-step simplified flow */}
+      <div className="section-card" data-section="transport-type" style={{ fontFamily: "'DM Sans','Inter',sans-serif" }}>
         <div className="section-title">🚐 Guest Transfer</div>
-        <div style={{ fontSize: 13, color: '#4a7a94', marginBottom: 14 }}>
-          Approximate estimates only — actual costs vary. Calculates cost for picking up outstation guests from transit hub to the wedding venue.
-        </div>
 
-        {/* Auto-distance calculator */}
-        <div style={{ marginBottom: 16, padding: 14, background: C.light, borderRadius: 12, border: `1.5px dashed ${C.sky}` }}>
-          <label className="form-label">Auto-calculate distance (free, no API key)</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-            <input type="text" id="fromCity" placeholder="From city e.g. Chennai"
-              style={{ flex: 1, minWidth: 140, padding: '8px 12px', border: `1.5px solid ${C.sky}`, borderRadius: 8, fontSize: 13, fontFamily: 'Inter,sans-serif' }} />
-            <input type="text" id="toCity" placeholder="To city e.g. Coimbatore"
-              style={{ flex: 1, minWidth: 140, padding: '8px 12px', border: `1.5px solid ${C.sky}`, borderRadius: 8, fontSize: 13, fontFamily: 'Inter,sans-serif' }} />
-            <button id="fetchDistBtn" onClick={async (e) => {
-              const btn = e.currentTarget
-              const from = document.getElementById('fromCity').value.trim()
-              const to   = document.getElementById('toCity').value.trim()
-              if (!from || !to) { alert('Enter both cities'); return }
-              btn.textContent = '...'
-              try {
-                const [oRes, dRes] = await Promise.all([
-                  fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(from + ', India') + '&format=json&limit=1'),
-                  fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(to + ', India') + '&format=json&limit=1')
-                ])
-                const [oData, dData] = await Promise.all([oRes.json(), dRes.json()])
-                if (!oData[0] || !dData[0]) { alert('City not found. Try full name e.g. Chennai, Tamil Nadu'); btn.textContent = 'Get km'; return }
-                const routeRes = await fetch('https://router.project-osrm.org/route/v1/driving/' + oData[0].lon + ',' + oData[0].lat + ';' + dData[0].lon + ',' + dData[0].lat + '?overview=false')
-                const routeData = await routeRes.json()
-                const km = Math.round(routeData.routes[0].distance / 1000)
-                update('transfer_distance_km', km)
-                btn.textContent = km + ' km ✓'
-                setTimeout(() => { btn.textContent = 'Get km' }, 3000)
-              } catch {
-                alert('Auto-fetch failed. Enter km manually.')
-                btn.textContent = 'Get km'
-              }
-            }} style={{ padding: '8px 16px', background: C.amber, border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, color: C.primary, fontSize: 13 }}>
-              Get km
-            </button>
+        {/* Step 1 */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#111', marginBottom: 12 }}>
+            Are any guests coming from out of town?
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            {[true, false].map(val => {
+              const sel = hasOutstation === val
+              return (
+                <button key={String(val)} onClick={() => {
+                  update('has_outstation', val)
+                  if (!val) update('transport_pct', 0)
+                  scrollToNextSection('transport-type', 420)
+                }}
+                  style={{
+                    flex: 1, padding: '14px 0', borderRadius: 12, fontSize: 15, fontWeight: 700,
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    border: `1.5px solid ${sel ? '#D4537E' : '#EBEBEB'}`,
+                    background: sel ? '#FDF2F8' : 'white',
+                    color: sel ? '#D4537E' : '#555',
+                  }}>
+                  {val ? 'Yes' : 'No'}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        {/* Source type */}
-        <div style={{ marginBottom: 16 }}>
-          <label className="form-label">Pickup Location</label>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
-            {['Airport', 'Railway Station', 'Bus Stand'].map(type => (
-              <button key={type} onClick={() => update('transfer_source_type', type)}
-                style={{ padding: '8px 18px', borderRadius: 20, fontWeight: 700, fontSize: 13,
-                  border: `2px solid ${wedding.transfer_source_type === type ? C.amber : C.sky}`,
-                  background: wedding.transfer_source_type === type ? C.amber : 'white',
-                  color: wedding.transfer_source_type === type ? C.primary : C.blue,
-                  cursor: 'pointer', transition: 'all 0.2s' }}>
-                {type === 'Airport' ? '✈️' : type === 'Railway Station' ? '🚆' : '🚌'} {type}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Thumb rule ratio */}
-        <div style={{ marginBottom: 16 }}>
-          <label className="form-label">Guests per Vehicle (Thumb Rule)</label>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
-            {[1, 2, 3, 4, 5, 6].map(n => (
-              <button key={n} onClick={() => update('guests_per_vehicle', n)}
-                style={{ padding: '7px 16px', borderRadius: 20, fontWeight: 700, fontSize: 13,
-                  border: `2px solid ${guestsPerVehicle === n ? C.amber : C.sky}`,
-                  background: guestsPerVehicle === n ? C.amber : 'white',
-                  color: guestsPerVehicle === n ? C.primary : C.blue,
-                  cursor: 'pointer', transition: 'all 0.2s' }}>
-                1 car / {n} guests
-              </button>
-            ))}
-          </div>
-          <div style={{ fontSize: 11, color: '#4a7a94', marginTop: 4 }}>
-            Default: 1 Innova Crysta per 3 guests (Indian family thumb rule). Admin can adjust.
-          </div>
-        </div>
-
-        {/* Vehicle type */}
-        <div style={{ marginBottom: 16 }}>
-          <label className="form-label">Vehicle Type</label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginTop: 6 }}>
-            {Object.entries(VEHICLE_CONFIG).map(([id, cfg]) => (
-              <div key={id} onClick={() => update('vehicle_type', id)}
-                style={{ padding: '12px 14px', borderRadius: 12, textAlign: 'center', cursor: 'pointer',
-                  border: `2px solid ${vehType === id ? C.amber : C.sky}`,
-                  background: vehType === id ? '#fffbea' : 'white', transition: 'all 0.2s' }}>
-                <div style={{ fontWeight: 700, color: C.primary, fontSize: 13 }}>{cfg.label}</div>
-                <div style={{ fontSize: 11, color: C.blue, marginTop: 3 }}>
-                  ₹{cfg.base_fare.toLocaleString()} base + ₹{cfg.per_km}/km
+        {/* Step 2 — animated reveal */}
+        <AnimatePresence>
+          {hasOutstation === true && (
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#111', marginBottom: 12 }}>
+                  What % of guests need transport?
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {[20, 30, 50, 75, 100].map(pct => {
+                    const sel = transportPct === pct
+                    return (
+                      <button key={pct} onClick={() => update('transport_pct', pct)}
+                        style={{
+                          padding: '7px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700,
+                          cursor: 'pointer', transition: 'all 0.15s',
+                          border: `1.5px solid ${sel ? '#D4537E' : '#EBEBEB'}`,
+                          background: sel ? '#FDF2F8' : 'white',
+                          color: sel ? '#D4537E' : '#555',
+                        }}>
+                        {pct}%
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* Distance input */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-          <div>
-            <label className="form-label">
-              Distance: {sourceType} → Venue (km)
-            </label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input type="number" className="form-input" min={1} max={200}
-                value={wedding.transfer_distance_km || ''}
-                placeholder={`Auto: ~${autoDistance} km`}
-                onChange={e => update('transfer_distance_km', parseInt(e.target.value) || 0)}
-                style={{ maxWidth: 150 }} />
-              {wedding.transfer_distance_km === 0 && (
-                <span style={{ fontSize: 12, color: C.blue, fontStyle: 'italic' }}>
-                  Using city average ({autoDistance} km)
-                </span>
-              )}
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            {mapsUrl && (
-              <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '10px 16px', background: C.light, borderRadius: 10,
-                  color: C.primary, fontWeight: 600, fontSize: 12, textDecoration: 'none',
-                  border: `1.5px solid ${C.sky}` }}>
-                🗺️ Measure on Google Maps
-              </a>
-            )}
-          </div>
-        </div>
-
-        {outstationGuests > 0 ? (
-          <div style={{ background: '#e8faf0', borderRadius: 12, padding: 16,
-            border: '1.5px solid #6EE7B7' }}>
-            <div style={{ fontWeight: 700, color: '#065F46', marginBottom: 10 }}>Transfer Calculation</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
-              {[
-                { label: 'Outstation Guests', value: `${outstationGuests}` },
-                { label: `Vehicles (1 per ${guestsPerVehicle} guests)`, value: `${fleetSize}` },
-                { label: 'Trips (pickup + drop)', value: `${fleetSize * 2}` },
-                { label: 'Cost/Trip', value: formatRupees(costPerTrip) },
-              ].map(s => (
-                <div key={s.label} style={{ textAlign: 'center', background: 'white', borderRadius: 10, padding: 12 }}>
-                  <div style={{ fontSize: 11, color: '#4a7a94', marginBottom: 4 }}>{s.label}</div>
-                  <div style={{ fontFamily: 'EB Garamond,serif', fontSize: 20, fontWeight: 800, color: C.primary }}>
-                    {s.value}
-                  </div>
+              {/* Step 3 — stat boxes */}
+              {transportPct > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 8 }}>
+                  {[
+                    { label: 'Outstation guests', value: outstationGuests },
+                    { label: 'Innova Crystas needed', value: transferCars },
+                    { label: 'Estimated cost', value: `₹${(transferCost / 100000).toFixed(1)}L` },
+                  ].map(s => (
+                    <div key={s.label} style={{
+                      background: '#F8F8F8', borderRadius: 12, padding: '16px 14px', textAlign: 'center',
+                      border: '1px solid #EBEBEB'
+                    }}>
+                      <div style={{ fontSize: 11, color: '#888', marginBottom: 6, fontWeight: 500 }}>{s.label}</div>
+                      <div style={{ fontFamily: 'EB Garamond,serif', fontSize: 26, fontWeight: 800, color: '#111' }}>
+                        {s.value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 12, textAlign: 'center', padding: '10px', background: 'white', borderRadius: 10 }}>
-              <span style={{ fontSize: 13, color: '#4a7a94' }}>Transfer Total: </span>
-              <span style={{ fontFamily: 'EB Garamond,serif', fontSize: 22, fontWeight: 800, color: '#047857' }}>
-                {formatRupees(transferCost)}
-              </span>
-              <span style={{ fontSize: 11, color: '#4a7a94', display: 'block', marginTop: 2 }}>
-                {fleetSize} vehicles × 2 trips × ₹{Math.round(costPerTrip).toLocaleString()}/trip
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: '12px 16px', background: '#f0f4f8', borderRadius: 10, fontSize: 13, color: '#4a7a94' }}>
-            No outstation guests entered. Add outstation guests in the Venue tab to calculate transfers.
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {hasOutstation === false && (
+          <div style={{ padding: '12px 16px', background: '#F8F8F8', borderRadius: 10,
+            fontSize: 13, color: '#888', border: '1px solid #EBEBEB' }}>
+            No transfer cost added.
           </div>
         )}
       </div>
 
       {/* Bride & Groom Travel */}
-      <div className="section-card">
+      <div className="section-card" data-section="guest-transfers">
         <div className="section-title">💒 Bride & Groom Travel</div>
         <div style={{ fontSize: 13, color: '#4a7a94', marginBottom: 14 }}>
           If bride or groom is travelling from another city, include their travel cost here.
@@ -437,7 +392,7 @@ export function Tab7Logistics() {
                   </label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {TRAVEL_MODES.map(m => (
-                      <button key={m} onClick={() => update(modeKey, m)}
+                      <button key={m} onClick={() => { update(modeKey, m); scrollToNextSection('guest-transfers', 420) }}
                         style={{ padding: '5px 12px', borderRadius: 16, fontSize: 12, fontWeight: 700,
                           border: `2px solid ${mode===m ? C.amber : C.sky}`,
                           background: mode===m ? C.amber : 'white',
@@ -573,7 +528,7 @@ export function Tab7Logistics() {
       </div>
 
       {/* SFX */}
-      <div className="section-card">
+      <div className="section-card" data-section="sfx">
         <div className="section-title">✨ Special Effects (SFX)</div>
         <MultiImageSelector items={SFX_ITEMS} selected={wedding.sfx_items || []}
           onChange={v => update('sfx_items', v)} showCost />
@@ -590,7 +545,7 @@ export function Tab7Logistics() {
         <div style={{ background:C.light, borderRadius:12, padding:16 }}>
           <div style={{ fontSize:13, fontWeight:700, color:C.primary, marginBottom:10 }}>Cost Breakup:</div>
           {[
-            { label:`${sourceType} Transfers`, calc: outstationGuests>0 ? `${fleetSize} ${vehType} × 2 trips × ₹${Math.round(costPerTrip).toLocaleString()} (1 per ${guestsPerVehicle} guests)` : 'No outstation guests', val:transferCost },
+            { label:'Guest Transfers', calc: transferCost>0 ? `${transferCars} Innova Crystas × 2 trips × ₹4,500 (${transportPct}% of guests)` : 'No outstation guests', val:transferCost },
             { label:'Bride Travel', calc: wedding.bride_travel_mode ? `${wedding.bride_travel_mode} from ${wedding.bride_district||'bride city'}` : 'Not entered', val:brideTravel },
             { label:'Groom Travel', calc: wedding.groom_travel_mode ? `${wedding.groom_travel_mode} from ${wedding.groom_district||'groom city'}` : 'Not entered', val:groomTravel },
             { label:'Ghodi (Baraat)', calc: wedding.ghodi ? `Rate for ${district||'city'}` : 'Not booked', val:ghodiCost },
@@ -610,6 +565,31 @@ export function Tab7Logistics() {
           ))}
         </div>
       </div>
+
+      {/* Sticky Next button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          position: 'sticky', bottom: '1.5rem',
+          display: 'flex', justifyContent: 'center',
+          zIndex: 50, marginTop: '2rem'
+        }}
+      >
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('weddingNextTab'))}
+          style={{
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: '10px',
+            padding: '14px 40px', fontSize: '15px',
+            fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'inherit',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
+          }}
+        >
+          Next: Budget →
+        </button>
+      </motion.div>
     </div>
   )
 }

@@ -21,6 +21,50 @@ def optimize_budget(payload: ConfigPayload):
     target = data.get("target_budget", 0)
     return run_pso_optimizer(data, target)
 
+@router.post("/scenarios")
+def get_scenarios(payload: ConfigPayload):
+    base       = calculate_full_budget(payload.data)
+    base_total = base["total"]
+    base_items = base["items"]
+
+    configs = [
+        {"name": "Minimalist", "multiplier": 0.60,
+         "description": "Simple & elegant — essentials only",
+         "venue_type": "Open Lawn / Farm", "food_tier": "Budget", "hotel_tier": "3-star"},
+        {"name": "Modest", "multiplier": 0.80,
+         "description": "Balanced celebration",
+         "venue_type": "Banquet Hall", "food_tier": "Standard", "hotel_tier": "4-star"},
+        {"name": "Standard", "multiplier": 1.00,
+         "description": "Full celebration as planned",
+         "venue_type": payload.data.get("venue_type", "Banquet Hall"),
+         "food_tier":  payload.data.get("food_budget_tier", "High"),
+         "hotel_tier": payload.data.get("hotel_tier", "4-star")},
+        {"name": "Luxury", "multiplier": 1.40,
+         "description": "Grand affair — no compromises",
+         "venue_type": "Palace / Heritage Hotel", "food_tier": "Luxury", "hotel_tier": "5-star"},
+    ]
+
+    result = {}
+    for cfg in configs:
+        m = cfg["multiplier"]
+        scaled_items = {
+            cat: {"low": round(v["low"] * m), "mid": round(v["mid"] * m), "high": round(v["high"] * m)}
+            for cat, v in base_items.items()
+        }
+        result[cfg["name"]] = {
+            "total": {
+                "low":  round(base_total["low"]  * m),
+                "mid":  round(base_total["mid"]  * m),
+                "high": round(base_total["high"] * m),
+            },
+            "items":       scaled_items,
+            "description": cfg["description"],
+            "venue_type":  cfg["venue_type"],
+            "food_tier":   cfg["food_tier"],
+            "hotel_tier":  cfg["hotel_tier"],
+        }
+    return result
+
 @router.get("/artists")
 def get_artists():
     return {"artists": ARTIST_COSTS}

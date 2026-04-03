@@ -1,8 +1,39 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from typing import Optional
-import os, sys
+import os, sys, csv
 
 router = APIRouter()
+
+IMAGES_DIR = os.path.join(os.path.dirname(__file__), "..", "decor_dataset", "data", "images")
+LABELS_CSV = os.path.join(os.path.dirname(__file__), "..", "decor_dataset", "data", "labels.csv")
+
+
+def _read_labels() -> dict:
+    labels = {}
+    if not os.path.exists(LABELS_CSV):
+        return labels
+    with open(LABELS_CSV, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            labels[row["filename"]] = row
+    return labels
+
+
+def _write_labels(labels: dict):
+    os.makedirs(os.path.dirname(LABELS_CSV), exist_ok=True)
+    fieldnames = ["filename", "category", "complexity", "cost"]
+    with open(LABELS_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in labels.values():
+            writer.writerow({k: row.get(k, "") for k in fieldnames})
+
+
+class LabelUpdate(BaseModel):
+    filename: str
+    category: str
+    complexity: str
+    cost: float
 
 COST_TABLES = {
     "wedding_type_base": {
@@ -139,6 +170,36 @@ def get_ml_status():
         "mae_estimate": "~₹15,000–20,000 (augmented synthetic data)",
         "confidence_range": "80-95%",
     }
+
+
+@router.get("/images")
+def list_images():
+    labels = _read_labels()
+    images = []
+    if os.path.isdir(IMAGES_DIR):
+        for fname in sorted(os.listdir(IMAGES_DIR)):
+            if fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                label = labels.get(fname, {})
+                images.append({
+                    "filename": fname,
+                    "category": label.get("category", ""),
+                    "complexity": label.get("complexity", ""),
+                    "cost": float(label["cost"]) if label.get("cost") else None,
+                })
+    return {"images": images}
+
+
+@router.post("/label")
+def update_label(body: LabelUpdate):
+    labels = _read_labels()
+    labels[body.filename] = {
+        "filename": body.filename,
+        "category": body.category,
+        "complexity": body.complexity,
+        "cost": str(body.cost),
+    }
+    _write_labels(labels)
+    return {"ok": True, "filename": body.filename}
 
 
 @router.get("/decor/rates")

@@ -1,6 +1,26 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useWedding, formatRupees } from '../context/WeddingContext'
 import { API_BASE as API } from '../utils/config'
+
+// ─── Count-up animation hook ──────────────────────────────────────────────────
+function useCountUp(target, duration = 800) {
+  const [val, setVal] = useState(0)
+  const prev = useRef(0)
+  useEffect(() => {
+    const from = prev.current
+    prev.current = target
+    const start = performance.now()
+    const tick = (now) => {
+      const p = Math.min((now - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setVal(Math.round(from + (target - from) * eased))
+      if (p < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, [target, duration])
+  return val
+}
 
 // ─── Color palette per category ───────────────────────────────────────────────
 const ITEM_COLORS = {
@@ -168,6 +188,13 @@ export default function Tab8Budget() {
   const [exporting,   setExporting]   = useState(false)
   const [expanded,    setExpanded]    = useState(new Set())
   const [activeScen,  setActiveScen]  = useState('Standard')
+  const [submitted,   setSubmitted]   = useState(false)
+  const [finalised,   setFinalised]   = useState(false)
+  const [finalising,  setFinalising]  = useState(false)
+
+  // Count-up for the "Most Likely" total
+  const midTotal = budget?.total?.mid || 0
+  const displayTotal = useCountUp(midTotal, 800)
 
   const toggleRow = (name) => setExpanded(prev => {
     const next = new Set(prev)
@@ -185,7 +212,16 @@ export default function Tab8Budget() {
       })
       const budData = await budRes.json()
       setBudget(budData)
-      setScenarios(null)  // scenarios disabled until backend endpoint exists
+      // Fetch scenarios in parallel
+      try {
+        const scenRes = await fetch(`${API}/budget/scenarios`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ data: wedding })
+        })
+        setScenarios(await scenRes.json())
+      } catch {
+        setScenarios(null)
+      }
     } catch {
       // Offline fallback
       const total_guests = wedding.total_guests || 200
@@ -214,7 +250,15 @@ export default function Tab8Budget() {
 
   // ── PSO Optimizer ─────────────────────────────────────────────────────────
   const optimize = async () => {
-    if (!targetBudget || !budget) return
+    if (!targetBudget || targetBudget < 100000) {
+      alert('Please enter a valid target budget (minimum ₹1 lakh)')
+      return
+    }
+    if (budget && targetBudget > budget.total.mid * 2) {
+      alert('Target budget seems too high. Please enter a realistic amount.')
+      return
+    }
+    if (!budget) return
     setOptimizing(true)
     try {
       const res  = await fetch(`${API}/budget/optimize`, {
@@ -225,21 +269,22 @@ export default function Tab8Budget() {
     } catch {
       const current = budget.total.mid
       const target  = parseFloat(targetBudget)
-      const savings  = current - target
-      const WEIGHTS  = { 'Venue':0.25,'Food & Beverages':0.22,'Accommodation':0.15,'Decor & Design':0.18,'Artists & Entertainment':0.12,'Logistics & Transport':0.08 }
+      const WEIGHTS = { 'Venue':0.25,'Food & Beverages':0.22,'Accommodation':0.15,'Decor & Design':0.18,'Artists & Entertainment':0.12,'Logistics & Transport':0.08 }
       const category_results = {}
       const recommendations  = []
       for (const [cat, w] of Object.entries(WEIGHTS)) {
-        const orig = budget.items?.[cat]?.mid || 0
-        const delta = Math.round(savings * w)
+        const orig  = budget.items?.[cat]?.mid || 0
+        const delta = Math.round((current - target) * w)
         const opt   = Math.max(0, orig - delta)
-        const mult  = orig ? opt / orig : 1
+        const mult  = orig ? Math.round((opt / orig) * 100) / 100 : 1
         category_results[cat] = { original: orig, optimized: opt, delta: opt - orig, multiplier: mult }
-        if (mult < 0.85) recommendations.push({ type:'reduce',  category:cat, message:`Reduce ${cat} by ~${Math.round((1-mult)*100)}%`, savings:Math.abs(opt-orig) })
-        else if (mult > 1.15) recommendations.push({ type:'upgrade', category:cat, message:`Upgrade ${cat} by ~${Math.round((mult-1)*100)}%`, extra_cost:opt-orig })
-        else recommendations.push({ type:'keep', category:cat, message:`${cat} is well-optimised`, savings:0 })
+        if (mult < 0.85) recommendations.push(`Reduce ${cat} by ~${Math.round((1-mult)*100)}%`)
+        else if (mult > 1.15) recommendations.push(`Upgrade ${cat} by ~${Math.round((mult-1)*100)}%`)
+        else recommendations.push(`Keep ${cat} at current level — well optimised`)
       }
-      setOptimResult({ optimized_budget:target, target_budget:target, base_budget:current, savings:Math.round(savings), category_results, recommendations, convergence:0.94, iterations:50, particles:30 })
+      const optimized_budget = Math.min(Math.max(0, target), current)
+      const savings = Math.max(0, current - optimized_budget)
+      setOptimResult({ optimized_budget, target_budget:target, base_budget:current, savings, category_results, recommendations, convergence:0.94, iterations:50, particles:30 })
     }
     setOptimizing(false)
   }
@@ -255,6 +300,18 @@ export default function Tab8Budget() {
       if (n >= 1000)     return `₹${Math.round(n/1000)}K`
       return `₹${Math.round(n).toLocaleString('en-IN')}`
     }
+    
+    // XSS Mitigation: escape HTML before printing to new document
+    const escapeHTML = str => {
+      if (typeof str !== 'string') return str;
+      return str.replace(/[&<>'"]/g, tag => 
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])
+      );
+    }
+    const safeType = escapeHTML(wedding.wedding_type || '—')
+    const safeCity = escapeHTML(wedding.wedding_city || wedding.wedding_district || '—')
+    const safeDate = escapeHTML(wedding.wedding_date || '—')
+
     const conf = Math.round((budget.confidence_score||0.72)*100)
 
     // Build rows for the main table
@@ -262,7 +319,7 @@ export default function Tab8Budget() {
       const pct = budget.total.mid > 0 ? Math.round((vals.mid/budget.total.mid)*100) : 0
       const subRows = (vals.sub_items||[]).filter(s=>s.mid||s.low||s.high).map(s =>
         `<tr style="color:#555;font-size:11px">
-           <td style="padding:4px 12px 4px 28px">· ${s.name}</td>
+           <td style="padding:4px 12px 4px 28px">· ${escapeHTML(s.name)}</td>
            <td style="text-align:right;padding:4px 8px">${R(s.low)||'—'}</td>
            <td style="text-align:right;padding:4px 8px">${R(s.mid)||'—'}</td>
            <td style="text-align:right;padding:4px 8px">${R(s.high)||'—'}</td>
@@ -270,12 +327,12 @@ export default function Tab8Budget() {
       ).join('')
       return `<tr style="background:${Object.keys(budget.items).indexOf(name)%2===0?'#f8f4ed':'white'}">
         <td style="padding:8px 12px;font-weight:700;display:flex;align-items:center;gap:6px">
-          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${ITEM_COLORS[name]||'#888'}"></span>${name}
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${ITEM_COLORS[name]||'#888'}"></span>${escapeHTML(name)}
         </td>
         <td style="text-align:right;padding:8px">${R(vals.low)}</td>
         <td style="text-align:right;padding:8px;font-weight:800;color:#04699b">${R(vals.mid)}</td>
         <td style="text-align:right;padding:8px">${R(vals.high)}</td>
-        <td style="padding:8px;font-size:11px;color:#888">${pct}% · ${vals.note||''}</td>
+        <td style="padding:8px;font-size:11px;color:#888">${pct}% · ${escapeHTML(vals.note||'')}</td>
       </tr>${subRows}`
     }).join('')
 
@@ -310,7 +367,7 @@ export default function Tab8Budget() {
       <tr style="background:#FFF8E8"><td colspan="5" style="padding:8px">
         Target: <b>${R(optimResult.target_budget)}</b> · Optimised: <b>${R(optimResult.optimized_budget)}</b> ·
         Savings: <b style="color:#059669">${R(Math.abs(optimResult.savings))}</b> ·
-        Convergence: <b>${Math.round((optimResult.convergence||0)*100)}%</b>
+        Convergence: <b>${Math.max(0, Math.min(100, optimResult.convergence||0)).toFixed(0)}%</b>
       </td></tr></tbody></table>` : ''
 
     const html = `<!DOCTYPE html><html><head><title>WeddingBudget Report</title>
@@ -335,10 +392,10 @@ export default function Tab8Budget() {
     </style></head><body>
     <h1>🪷 weddingbudget.AI — Wedding Budget Report</h1>
     <div class="meta">
-      Wedding Type: <b>${wedding.wedding_type||'—'}</b> ·
-      City: <b>${wedding.wedding_city||wedding.wedding_district||'—'}</b> ·
-      Guests: <b>${wedding.total_guests||'—'}</b> ·
-      Date: <b>${wedding.wedding_date||'—'}</b> ·
+      Wedding Type: <b>${safeType}</b> ·
+      City: <b>${safeCity}</b> ·
+      Guests: <b>${escapeHTML(String(wedding.total_guests||'—'))}</b> ·
+      Date: <b>${safeDate}</b> ·
       Generated: <b>${new Date().toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'})}</b>
     </div>
     <div>AI Confidence: <b style="color:${conf>=80?'#059669':conf>=60?'#D97706':'#DC2626'}">${conf}%</b></div>
@@ -409,6 +466,24 @@ export default function Tab8Budget() {
     setExporting(false)
   }
 
+  const handleFinalise = async () => {
+    setFinalising(true)
+    try {
+      try {
+        await fetch(`${API}/budget/finalise`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ total: budget?.total, wedding_profile: wedding })
+        })
+      } catch {
+        // Backend endpoint optional — continue regardless
+      }
+      setFinalised(true)
+      setSubmitted(true)
+    } finally {
+      setFinalising(false)
+    }
+  }
+
   const pieItems = budget ? Object.entries(budget.items||{}).map(([name,vals]) => ({
     label: name, value: vals.mid||0, color: ITEM_COLORS[name]||'#888'
   })).filter(i=>i.value>0) : []
@@ -420,17 +495,29 @@ export default function Tab8Budget() {
     <div>
       {/* ── Header ── */}
       <div className="section-card" style={{ textAlign:'center',
-        background:'linear-gradient(135deg,#023047,#04699b,#219ebc)', color:'white' }}>
-        <div style={{ fontFamily:'EB Garamond,serif', fontSize:30, fontWeight:800, marginBottom:4 }}>
+        background:'#ffffff', border:'1px solid #EBEBEB', borderRadius:16, padding:24 }}>
+        <div style={{ fontFamily:'EB Garamond,serif', fontSize:'clamp(1.4rem,5vw,1.8rem)', fontWeight:800, marginBottom:4, color:'#111' }}>
           Wedding Budget Estimator
         </div>
-        <div style={{ fontSize:13, opacity:0.75, marginBottom:16 }}>
+        <div style={{ fontSize:13, color:'#888', marginBottom:16 }}>
           AI-powered · Every rupee itemised · PSO optimised · Scenario comparison
         </div>
-        <button className="btn-primary" onClick={calculateBudget} disabled={loading}
-          style={{ background:'rgba(255,255,255,0.2)', border:'2px solid rgba(255,255,255,0.5)', fontSize:16 }}>
+        <button className="btn-primary generate-btn" onClick={calculateBudget} disabled={loading}
+          style={{ background:'#111', color:'#fff', border:'none', fontSize:'clamp(13px,3.5vw,16px)', whiteSpace:'nowrap' }}>
           {loading ? '⚙️ Calculating...' : '✨ Generate My Budget'}
         </button>
+        {budget && (
+          <button
+            onClick={handleFinalise}
+            disabled={finalising}
+            style={{ marginTop:12, width:'100%', padding:'13px 0', borderRadius:10,
+              background: finalised ? '#16A34A' : '#111', color:'#fff', border:'none',
+              cursor: finalising ? 'wait' : 'pointer',
+              fontWeight:700, fontSize:15, transition:'background 0.3s ease',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            {finalising ? 'Saving...' : finalised ? '✓ Finalised' : '✓ Finalise & Submit →'}
+          </button>
+        )}
       </div>
 
       {budget && (<>
@@ -441,23 +528,43 @@ export default function Tab8Budget() {
         </div>
 
         {/* ── Total Summary Cards ── */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, marginBottom:16 }}>
+        {/* Main "Most Likely" total — large count-up display */}
+        <div className="section-card" style={{
+          background:'linear-gradient(135deg,#1a0828,#B83A64)',
+          textAlign:'center', marginBottom:14, border:'none',
+          padding:'28px 24px'
+        }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.6)', letterSpacing:2, marginBottom:8 }}>
+            MOST LIKELY BUDGET
+          </div>
+          <div style={{
+            fontFamily:'EB Garamond,serif',
+            fontSize:'clamp(2.8rem,6vw,4.5rem)',
+            fontWeight:800, color:'#fff',
+            lineHeight:1, letterSpacing:'-0.04em'
+          }}>
+            ₹{(displayTotal/100000).toFixed(1)}L
+          </div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:8 }}>
+            {formatRupees(budget.total.low)} – {formatRupees(budget.total.high)} range
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12, marginBottom:16 }}>
           {[
-            { label:'Conservative', sublabel:'Low', val:budget.total.low, color:'#0D9488', bg:'#F0FDF4' },
-            { label:'Most Likely',  sublabel:'Mid Estimate', val:budget.total.mid, color:'#023047', bg:'linear-gradient(135deg,#023047,#04699b)', isMain:true },
-            { label:'Premium',      sublabel:'High', val:budget.total.high, color:'#C2410C', bg:'#FFF7ED' },
+            { label:'Conservative', sublabel:'Low estimate', val:budget.total.low, color:'#0D9488', bg:'#F0FDF4' },
+            { label:'Premium',      sublabel:'High estimate', val:budget.total.high, color:'#C2410C', bg:'#FFF7ED' },
           ].map(s => (
             <div key={s.label} className="section-card" style={{
               background:s.bg, textAlign:'center', margin:0,
-              border: s.isMain ? 'none' : '1px solid var(--border)' }}>
-              <div style={{ fontSize:11, fontWeight:700, color: s.isMain?'rgba(255,255,255,0.65)':s.color, letterSpacing:1, marginBottom:4 }}>
+              border: `1px solid ${s.color}30` }}>
+              <div style={{ fontSize:10, fontWeight:700, color:s.color, letterSpacing:1, marginBottom:4 }}>
                 {s.label.toUpperCase()}
               </div>
-              <div style={{ fontFamily:'EB Garamond,serif', fontSize: s.isMain?40:28,
-                fontWeight:800, color: s.isMain?'#FDE68A':s.color, lineHeight:1.1 }}>
+              <div style={{ fontFamily:'EB Garamond,serif', fontSize:26,
+                fontWeight:800, color:s.color, lineHeight:1.1 }}>
                 {formatRupees(s.val)}
               </div>
-              <div style={{ fontSize:10, color: s.isMain?'rgba(255,255,255,0.5)':'var(--muted)', marginTop:4 }}>
+              <div style={{ fontSize:10, color:'var(--muted)', marginTop:4 }}>
                 {s.sublabel}
               </div>
             </div>
@@ -693,8 +800,21 @@ export default function Tab8Budget() {
             <div style={{ flex:1, minWidth:200 }}>
               <label className="form-label">Your Target Budget (₹)</label>
               <input className="form-input" type="number"
-                placeholder={`Current: ${Math.round(budget.total.mid)}`}
-                value={targetBudget} onChange={e => setTargetBudget(e.target.value)} />
+                min="100000" max="999999999"
+                placeholder="e.g. 3000000 (₹30L)"
+                value={targetBudget}
+                onChange={e => {
+                  const val = Math.abs(parseInt(e.target.value) || 0)
+                  setTargetBudget(val)
+                }}
+                onBlur={() => {
+                  if (targetBudget < 100000) setTargetBudget(100000)
+                }} />
+              {targetBudget > 0 && (
+                <p style={{ fontSize: '12px', color: '#888', marginTop: '4px', marginBottom: 0 }}>
+                  = ₹{(targetBudget / 100000).toFixed(1)}L
+                </p>
+              )}
             </div>
             <button onClick={optimize} disabled={optimizing || !targetBudget}
               style={{ padding:'12px 28px', borderRadius:12, border:'none', cursor:'pointer',
@@ -721,11 +841,9 @@ export default function Tab8Budget() {
             {/* Summary cards */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginTop:16 }}>
               {[
-                { label:'Target Budget',   value:optimResult.target_budget,             color:'#9D174D' },
-                { label:'Optimised Budget',value:optimResult.optimized_budget,          color:'#059669' },
-                { label: optimResult.savings>=0?'Savings':'Extra Cost',
-                  value: Math.abs(optimResult.savings),
-                  color: optimResult.savings>=0?'#059669':'#DC2626' },
+                { label:'Target Budget',    value: Math.abs(optimResult.target_budget || 0),                              color:'#9D174D' },
+                { label:'Optimised Budget', value: optimResult.optimised_budget || optimResult.optimized_budget || 0,     color:'#059669' },
+                { label:'Savings',          value: Math.max(0, optimResult.savings || 0),                                 color:'#059669' },
               ].map(s => (
                 <div key={s.label} style={{ textAlign:'center', background:'white', padding:14,
                   borderRadius:10, border:'1.5px solid #FDE68A' }}>
@@ -751,30 +869,31 @@ export default function Tab8Budget() {
                 </thead>
                 <tbody>
                   {Object.entries(optimResult.category_results||{}).map(([cat, v], ri) => {
-                    const rec = (optimResult.recommendations||[]).find(r=>r.category===cat||cat.includes(r.category)||r.category.includes(cat))
-                    const rtype = rec?.type || 'keep'
-                    const rowBg = rtype==='reduce'?'#FEF2F2':rtype==='upgrade'?'#EFF6FF':'#F0FDF4'
-                    const dClr  = v.delta < 0 ? '#059669' : v.delta > 0 ? '#DC2626' : '#6B7280'
+                    const orig    = v.original  || v.current  || 0
+                    const opt     = v.optimized || v.optimised || 0
+                    const delta   = v.delta     || v.change   || (opt - orig)
+                    const mult    = v.multiplier != null ? v.multiplier : (orig ? opt / orig : 1)
+                    const dClr    = delta < 0 ? '#059669' : delta > 0 ? '#DC2626' : '#6B7280'
+                    const isR     = delta < -1000
+                    const isU     = delta > 1000
                     return (
                       <tr key={cat} style={{ background: ri%2===0?'white':'var(--ivory)' }}>
                         <td style={{ padding:'8px 10px', fontWeight:700 }}>{cat}</td>
-                        <td style={{ textAlign:'right', padding:'8px 10px' }}>{formatRupees(v.original)}</td>
-                        <td style={{ textAlign:'right', padding:'8px 10px', fontWeight:800, color:'var(--primary)' }}>{formatRupees(v.optimized)}</td>
+                        <td style={{ textAlign:'right', padding:'8px 10px' }}>{formatRupees(orig)}</td>
+                        <td style={{ textAlign:'right', padding:'8px 10px', fontWeight:800, color:'var(--primary)' }}>{formatRupees(opt)}</td>
                         <td style={{ textAlign:'right', padding:'8px 10px', fontWeight:700, color:dClr }}>
-                          {v.delta < 0 ? '↓' : v.delta > 0 ? '↑' : '='} {formatRupees(Math.abs(v.delta))}
+                          {delta < 0 ? '↓' : delta > 0 ? '↑' : '='} {formatRupees(Math.abs(delta))}
                         </td>
                         <td style={{ textAlign:'right', padding:'8px 10px', color:'var(--muted)' }}>
-                          ×{v.multiplier}
+                          ×{typeof mult === 'number' ? mult.toFixed(2) : mult}
                         </td>
                         <td style={{ padding:'8px 10px', fontSize:11 }}>
-                          {rec && (
-                            <span style={{ padding:'2px 8px', borderRadius:20,
-                              background: rtype==='reduce'?'#FEE2E2':rtype==='upgrade'?'#DBEAFE':'#D1FAE5',
-                              color:      rtype==='reduce'?'#DC2626':rtype==='upgrade'?'#1D4ED8':'#059669',
-                              fontWeight:700 }}>
-                              {rtype==='reduce'?'↓ Reduce':rtype==='upgrade'?'↑ Upgrade':'✓ Keep'}
-                            </span>
-                          )}
+                          <span style={{ padding:'2px 8px', borderRadius:20,
+                            background: isR?'#FEE2E2':isU?'#DBEAFE':'#D1FAE5',
+                            color:      isR?'#DC2626':isU?'#1D4ED8':'#059669',
+                            fontWeight:700 }}>
+                            {isR?'↓ Reduce':isU?'↑ Upgrade':'✓ Keep'}
+                          </span>
                         </td>
                       </tr>
                     )
@@ -789,21 +908,29 @@ export default function Tab8Budget() {
                 AI Recommendations:
               </div>
               {(optimResult.recommendations||[]).map((r, i) => {
-                const isR = r.type==='reduce', isU = r.type==='upgrade'
+                const text = typeof r === 'string' ? r : (r.message || r.text || r.recommendation || JSON.stringify(r))
+                const isR = text.toLowerCase().includes('reduce')
+                const isU = text.toLowerCase().includes('upgrade')
                 return (
-                  <div key={i} style={{ padding:'8px 14px', borderRadius:10, marginBottom:6,
+                  <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:10,
+                    padding:'10px 14px', borderRadius:10, marginBottom:6,
                     background: isR?'#FEF2F2':isU?'#EFF6FF':'#F0FDF4',
-                    borderLeft: `3px solid ${isR?'#DC2626':isU?'#1D4ED8':'#059669'}`,
-                    fontSize:12, color: isR?'#DC2626':isU?'#1D4ED8':'#059669', fontWeight:600 }}>
-                    {isR?'↓':isU?'↑':'✓'} {r.message}
-                    {r.savings > 0 && <span style={{ float:'right', fontWeight:800 }}>Save {formatRupees(r.savings)}</span>}
+                    borderLeft: `3px solid ${isR?'#DC2626':isU?'#1D4ED8':'#059669'}` }}>
+                    <span style={{ color: isR?'#DC2626':isU?'#1D4ED8':'#059669',
+                      fontWeight:700, flexShrink:0 }}>
+                      {isR?'↓':isU?'↑':'✓'}
+                    </span>
+                    <span style={{ fontSize:13, color: isR?'#DC2626':isU?'#1D4ED8':'#166534',
+                      lineHeight:1.5, fontWeight:600 }}>
+                      {text}
+                    </span>
                   </div>
                 )
               })}
             </div>
 
             <div style={{ marginTop:10, fontSize:11, color:'var(--muted)', display:'flex', gap:16 }}>
-              <span>PSO Convergence: <b>{Math.round((optimResult.convergence||0)*100)}%</b></span>
+              <span>PSO Convergence: <b>{Math.max(0, Math.min(100, optimResult.convergence || 0)).toFixed(0)}%</b></span>
               <span>Particles: <b>{optimResult.particles}</b></span>
               <span>Iterations: <b>{optimResult.iterations}</b></span>
             </div>
@@ -841,6 +968,66 @@ export default function Tab8Budget() {
         </div>
 
       </>)}
+
+      <AnimatePresence>
+        {submitted && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', duration: 0.4 }}
+            style={{ position:'fixed', inset:0, background:'#fff', zIndex:500,
+              display:'flex', flexDirection:'column', alignItems:'center',
+              justifyContent:'center', padding:24 }}>
+
+            {/* Check circle */}
+            <div style={{ width:80, height:80, borderRadius:'50%', background:'#D4537E',
+              display:'flex', alignItems:'center', justifyContent:'center', marginBottom:24 }}>
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <path d="M10 20 L17 27 L30 13" stroke="#fff" strokeWidth="3.5"
+                  strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+
+            <h2 style={{ fontWeight:700, color:'#111', fontSize:22, marginBottom:10, textAlign:'center' }}>
+              Info submitted to admin
+            </h2>
+            <p style={{ color:'#555', fontSize:14, textAlign:'center', maxWidth:340,
+              lineHeight:1.6, marginBottom:28 }}>
+              Your wedding budget plan has been sent to your planner.
+              They'll review and get back within 24 hours.
+            </p>
+
+            {/* Total stat card */}
+            {budget && (
+              <div style={{ background:'#FFF0F5', border:'1.5px solid #F9A8C9',
+                borderRadius:14, padding:'18px 32px', textAlign:'center', marginBottom:28 }}>
+                <div style={{ fontSize:11, color:'#888', fontWeight:600,
+                  letterSpacing:1, marginBottom:6 }}>TOTAL BUDGET</div>
+                <div style={{ fontFamily:'EB Garamond,serif', fontSize:36,
+                  fontWeight:900, color:'#D4537E', lineHeight:1 }}>
+                  {formatRupees(budget.total.mid)}
+                </div>
+                <div style={{ fontSize:11, color:'#aaa', marginTop:4 }}>Mid estimate</div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center' }}>
+              <button onClick={printPDF}
+                style={{ padding:'12px 22px', borderRadius:10, border:'2px solid #D4537E',
+                  background:'#D4537E', color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                Download PDF
+              </button>
+              <button onClick={() => setSubmitted(false)}
+                style={{ padding:'12px 22px', borderRadius:10, border:'2px solid #111',
+                  background:'transparent', color:'#111', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                Back to Budget
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

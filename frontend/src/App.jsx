@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { WeddingProvider, useWedding } from './context/WeddingContext'
+import LandingPage from './pages/LandingPage'
 import Tab1Style from './pages/Tab1Style'
 import Tab2Venue from './pages/Tab2Venue'
 import Tab3Decor from './pages/Tab3Decor'
@@ -21,61 +23,6 @@ const TABS = [
   { id: 6, label: '🚐 Logistics', short: 'Logistics' },
   { id: 7, label: '💰 Budget',    short: 'Budget' },
 ]
-
-// ─── Welcome / Landing Page ────────────────────────────────────────────────────
-function WelcomePage({ onEnter }) {
-  const [fading, setFading] = useState(false)
-
-  const enter = (role) => {
-    if (role === 'admin') {
-      const pwd = prompt('Enter admin password:')
-      if (pwd !== 'wedding@admin2025') { alert('Incorrect password'); return }
-    }
-    setFading(true)
-    setTimeout(() => onEnter(role), 600)
-  }
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'linear-gradient(135deg,#1A1207 0%,#3D2B15 60%,#1A1207 100%)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'Inter, sans-serif',
-      opacity: fading ? 0 : 1, transition: 'opacity 0.6s'
-    }}>
-      <div style={{ textAlign: 'center', maxWidth: 560, padding: '2rem' }}>
-        <div style={{ fontSize: 72, marginBottom: '1rem' }}>🪷</div>
-        <h1 style={{ fontFamily: 'EB Garamond, serif', fontSize: 52, color: '#C9A84C', margin: '0 0 .5rem' }}>
-          weddingbudget.ai
-        </h1>
-        <p style={{ fontSize: 17, color: 'rgba(250,248,243,0.7)', marginBottom: '.5rem' }}>
-          Intelligent Wedding Planning Platform
-        </p>
-        <p style={{ fontSize: 13, color: 'rgba(250,248,243,0.4)', marginBottom: '2.5rem' }}>
-          AI-powered budget estimation · Decor price prediction · End-to-end planning
-        </p>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button onClick={() => enter('client')} style={{
-            padding: '14px 40px', borderRadius: 12, border: 'none',
-            background: '#C9A84C', color: '#1A1207', fontSize: 15, fontWeight: 700, cursor: 'pointer'
-          }}>
-            Start Planning →
-          </button>
-          <button onClick={() => enter('admin')} style={{
-            padding: '14px 36px', borderRadius: 12,
-            border: '1.5px solid rgba(201,168,76,0.5)', background: 'transparent',
-            color: '#C9A84C', fontSize: 15, fontWeight: 600, cursor: 'pointer'
-          }}>
-            Admin Login
-          </button>
-        </div>
-        <p style={{ fontSize: 11, color: 'rgba(250,248,243,0.25)', marginTop: '2rem' }}>
-          Built for Hackathon 2026 · TCE
-        </p>
-      </div>
-    </div>
-  )
-}
 
 // ─── Admin Panel Tab ───────────────────────────────────────────────────────────
 const BOOKING_REQUESTS_INIT = [
@@ -266,44 +213,124 @@ function validateTab(tabIndex, wedding) {
   return errors
 }
 
-function BudgetStatusBar({ onAdminClick }) {
+function TopNav({ activeTab, allTabs, isAdminRole, goTo, onAdminClick }) {
   const { wedding } = useWedding()
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  const visibleTabs = allTabs.filter(tab => !tab.adminOnly || isAdminRole)
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 16, padding: '12px 28px',
-      background: `linear-gradient(90deg, ${C.primary}, #04699b, ${C.blue})`,
-      color: 'white', boxShadow: `0 4px 20px rgba(2,48,71,0.4)`
+    <nav className="top-nav" style={{
+      position: 'sticky', top: 0, zIndex: 200,
+      background: '#ffffff',
+      borderBottom: '1px solid #EBEBEB',
+      height: 56, padding: '0 24px',
+      display: 'flex', alignItems: 'center', gap: 16,
+      boxShadow: scrolled ? '0 2px 12px rgba(0,0,0,0.06)' : 'none',
+      transition: 'box-shadow 0.2s',
+      fontFamily: "'DM Sans', 'Inter', sans-serif",
+      maxWidth: '100vw', overflow: 'hidden'
     }}>
-      <div style={{ fontSize: 26 }}>💍</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: 'EB Garamond,serif', fontSize: 22, fontWeight: 800, letterSpacing: 0.5 }}>
-          WeddingBudget.ai
-        </div>
-        <div style={{ fontSize: 11, opacity: 0.8, fontWeight: 500 }}>AI-Powered Indian Wedding Budget Planner</div>
+      {/* Left — logo */}
+      <div className="logo-wrapper" style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+        <span style={{ fontSize: 17, lineHeight: 1 }}>🌸</span>
+        <span className="logo-text" style={{ fontWeight: 700, fontSize: 14, color: '#111', letterSpacing: '-0.2px' }}>
+          WeddingBudget.AI
+        </span>
       </div>
-      {wedding.wedding_type && (
-        <div style={{ fontSize: 12, background: 'rgba(255,255,255,0.15)', padding: '4px 14px', borderRadius: 20, fontWeight: 600 }}>
-          {wedding.wedding_type} Wedding
+
+      {/* Center — pill tabs with layoutId sliding indicator */}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}>
+        <div className="nav-tab-strip" style={{
+          display: 'flex', gap: 2, padding: 3,
+          background: '#ffffff', borderRadius: 10,
+          overflow: 'auto', maxWidth: '100%'
+        }}>
+          {visibleTabs.map(tab => {
+            const active = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => goTo(tab.id)}
+                style={{
+                  position: 'relative',
+                  padding: '5px 11px',
+                  borderRadius: 7, border: 'none', cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: active ? 700 : 500,
+                  color: active ? '#111' : '#888',
+                  background: 'transparent',
+                  boxShadow: 'none',
+                  fontFamily: "'DM Sans', 'Inter', sans-serif",
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                  zIndex: 1
+                }}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="activeTab"
+                    style={{
+                      position: 'absolute', inset: 0,
+                      background: '#fff', borderRadius: 7,
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.10)',
+                      zIndex: -1
+                    }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                  />
+                )}
+                <span className="nav-tab-label" style={{ position: 'relative', zIndex: 1 }}>{tab.label}</span>
+                <span className="nav-tab-icon" style={{ position: 'relative', zIndex: 1, display: 'none' }}>{tab.label.split(' ')[0]}</span>
+              </button>
+            )
+          })}
         </div>
-      )}
-      {wedding.wedding_district && (
-        <div style={{ fontSize: 12, background: 'rgba(255,255,255,0.15)', padding: '4px 14px', borderRadius: 20, fontWeight: 600 }}>
-          📍 {wedding.wedding_district}
-        </div>
-      )}
-      {wedding.events?.length > 0 && (
-        <div style={{ fontSize: 12, background: 'rgba(255,255,255,0.15)', padding: '4px 14px', borderRadius: 20, fontWeight: 600 }}>
-          🎉 {wedding.events.length} Events
-        </div>
-      )}
-      <button onClick={onAdminClick} title="Admin Panel"
-        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)',
-          color: 'white', borderRadius: 10, padding: '6px 14px', cursor: 'pointer',
-          fontSize: 12, fontWeight: 700, marginLeft: 8 }}>
-        ⚙️ Admin
-      </button>
-    </div>
+      </div>
+
+      {/* Right — context chips + admin */}
+      <div className="nav-right-chips" style={{ display: 'flex', gap: 7, alignItems: 'center', flexShrink: 0 }}>
+        {wedding.wedding_type && (
+          <span style={{
+            fontSize: 11, fontWeight: 600,
+            padding: '3px 10px', borderRadius: 20,
+            background: '#FBE8EF', color: '#D4537E',
+            border: '1px solid #F2C4D4',
+            whiteSpace: 'nowrap'
+          }}>
+            {wedding.wedding_type}
+          </span>
+        )}
+        {wedding.total_guests > 0 && (
+          <span style={{
+            fontSize: 11, fontWeight: 600,
+            padding: '3px 10px', borderRadius: 20,
+            background: '#DCFCE7', color: '#16A34A',
+            border: '1px solid #BBF7D0',
+            whiteSpace: 'nowrap'
+          }}>
+            {wedding.total_guests} guests
+          </span>
+        )}
+        <button
+          onClick={onAdminClick}
+          title="Admin Panel"
+          style={{
+            background: 'none', border: '1px solid #EBEBEB',
+            borderRadius: 7, padding: '4px 10px',
+            fontSize: 13, cursor: 'pointer', color: '#888',
+            fontFamily: "'DM Sans', 'Inter', sans-serif",
+            lineHeight: 1
+          }}
+        >
+          ⚙️
+        </button>
+      </div>
+    </nav>
   )
 }
 
@@ -332,6 +359,13 @@ function AppInner() {
     setTimeout(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
 
+  // Listen for sticky "Next" buttons inside tab components
+  useEffect(() => {
+    const listener = () => handleNext()
+    window.addEventListener('weddingNextTab', listener)
+    return () => window.removeEventListener('weddingNextTab', listener)
+  }, [activeTab, wedding])
+
   const handleNext = () => {
     const errors = validateTab(activeTab, wedding)
     if (errors.length > 0) {
@@ -348,33 +382,35 @@ function AppInner() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {showWelcome && (
-        <WelcomePage onEnter={(role) => {
-          setIsAdminRole(role === 'admin')
-          setShowWelcome(false)
-        }} />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, overflowY: 'auto' }}>
+          <LandingPage onEnter={(role) => {
+            setIsAdminRole(role === 'admin')
+            setShowWelcome(false)
+          }} />
+        </div>
       )}
-      <BudgetStatusBar onAdminClick={() => setShowAdmin(true)} />
+      <TopNav
+        activeTab={activeTab}
+        allTabs={allTabs}
+        isAdminRole={isAdminRole}
+        goTo={goTo}
+        onAdminClick={() => setShowAdmin(true)}
+      />
+      <div style={{ width: '100%', height: 3, background: '#EBEBEB' }}>
+        <div style={{ height: '100%', background: '#D4537E',
+          width: `${(activeTab / 7) * 100}%`,
+          transition: 'width 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />
+      </div>
 
       <div ref={topRef} style={{ maxWidth: 1100, margin: '0 auto', width: '100%', padding: '24px 20px', flex: 1 }}>
-        {/* Tab Navigation */}
-        <div style={{ marginBottom: 28 }}>
-          <div className="tab-nav">
-            {allTabs.filter(tab => !tab.adminOnly || isAdminRole).map(tab => (
-              <button key={tab.id} className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => goTo(tab.id)}>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          {/* Progress dots */}
-          <div style={{ display: 'flex', gap: 5, marginTop: 12, justifyContent: 'center' }}>
-            {allTabs.filter(tab => !tab.adminOnly || isAdminRole).map(tab => (
-              <div key={tab.id} onClick={() => goTo(tab.id)}
-                style={{ width: activeTab === tab.id ? 28 : 8, height: 8, borderRadius: 4,
-                  background: tab.id < activeTab ? C.blue : activeTab === tab.id ? C.amber : C.sky,
-                  transition: 'all 0.3s', cursor: 'pointer' }} />
-            ))}
-          </div>
+        {/* Progress dots */}
+        <div className="progress-dots" style={{ display: 'flex', gap: 5, marginBottom: 24, justifyContent: 'center' }}>
+          {allTabs.filter(tab => !tab.adminOnly || isAdminRole).map(tab => (
+            <div key={tab.id} className="progress-dot" onClick={() => goTo(tab.id)}
+              style={{ width: activeTab === tab.id ? 28 : 8, height: 8, borderRadius: 4,
+                background: tab.id < activeTab ? '#D4537E' : activeTab === tab.id ? '#D4537E' : '#EBEBEB',
+                transition: 'all 0.3s', cursor: 'pointer' }} />
+          ))}
         </div>
 
         {/* Validation */}
@@ -387,10 +423,18 @@ function AppInner() {
           </div>
         )}
 
-        {/* Active page */}
-        <div key={activeTab} style={{ animation: 'fadeIn 0.3s ease' }}>
-          {pages[activeTab]}
-        </div>
+        {/* Active page — slide transition */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -24 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {pages[activeTab]}
+          </motion.div>
+        </AnimatePresence>
 
         {/* Next / Back */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, paddingTop: 20,
@@ -398,7 +442,7 @@ function AppInner() {
           <button onClick={() => { setValidationErrors([]); goTo(Math.max(0, activeTab - 1)) }}
             disabled={activeTab === 0}
             style={{ padding: '11px 26px', borderRadius: 12, border: `2px solid ${C.sky}`,
-              background: activeTab === 0 ? '#f0f4f8' : 'white',
+              background: 'white',
               cursor: activeTab === 0 ? 'not-allowed' : 'pointer',
               color: C.primary, fontWeight: 700, fontSize: 15 }}>
             ← Back
@@ -416,9 +460,6 @@ function AppInner() {
         </div>
       </div>
 
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-      `}</style>
     </div>
   )
 }

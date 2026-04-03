@@ -1,10 +1,17 @@
 import { useMemo, useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import { useWedding, VENUE_TYPES, HOTEL_TIERS, ALL_EVENTS, INDIA_STATES_DISTRICTS, getMandapams, formatRupees } from '../context/WeddingContext'
 import { MultiImageSelector, SingleImageSelector } from '../components/ImageCard'
+import { scrollToNextSection } from '../utils/scrollToNext'
+
+// Staggered section reveal
+const sectionStyle = (i) => ({
+  animation: `sectionReveal 0.5s cubic-bezier(0.16,1,0.3,1) ${i * 80}ms both`
+})
 
 const C = { primary: '#023047', amber: '#ffb703', blue: '#219ebc', light: '#e8f4fa', sky: '#8ecae6' }
 
-function StateCitySelector({ stateKey, districtKey, label, wedding, update }) {
+function StateCitySelector({ stateKey, districtKey, label, wedding, update, onDistrictSelect }) {
   const states = Object.keys(INDIA_STATES_DISTRICTS).sort()
   const districts = wedding[stateKey] ? INDIA_STATES_DISTRICTS[wedding[stateKey]] || [] : []
   return (
@@ -26,6 +33,7 @@ function StateCitySelector({ stateKey, districtKey, label, wedding, update }) {
             if (districtKey === 'wedding_district') update('wedding_city', e.target.value)
             if (districtKey === 'bride_district') update('bride_hometown', e.target.value)
             if (districtKey === 'groom_district') update('groom_hometown', e.target.value)
+            if (e.target.value) onDistrictSelect?.()
           }}>
           <option value="">-- Select District --</option>
           {districts.map(d => <option key={d} value={d}>{d}</option>)}
@@ -35,29 +43,35 @@ function StateCitySelector({ stateKey, districtKey, label, wedding, update }) {
   )
 }
 
-function MandapamCard({ venue, isSelected, onSelect }) {
+function MandapamCard({ venue, isSelected, onSelect, hasAnySelected }) {
   return (
-    <div onClick={() => onSelect(venue)}
+    <div
+      onClick={() => onSelect(venue)}
+      className={`sel-card${isSelected ? ' selected' : ''}${hasAnySelected && !isSelected ? ' dimmed' : ''}`}
       style={{
-        border: `2px solid ${isSelected ? C.amber : C.sky}`,
-        borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
-        background: isSelected ? '#fffbea' : 'white',
-        boxShadow: isSelected ? `0 0 0 3px rgba(255,183,3,0.2)` : 'none',
-        transition: 'all 0.2s', position: 'relative'
-      }}>
-      {isSelected && (
-        <div style={{ position: 'absolute', top: 10, right: 12,
-          background: C.amber, color: C.primary, borderRadius: '50%',
-          width: 22, height: 22, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontWeight: 800, fontSize: 13 }}>✓</div>
-      )}
-      <div style={{ fontWeight: 700, fontSize: 14, color: C.primary, marginBottom: 4 }}>{venue.name}</div>
+        border: `2px solid ${isSelected ? '#D4537E' : C.sky}`,
+        borderRadius: 14, padding: '16px 18px',
+        background: isSelected ? '#FDF2F8' : 'white',
+        boxShadow: isSelected ? '0 4px 20px rgba(212,83,126,0.12)' : 'none',
+      }}
+    >
+      {/* Rose checkmark badge */}
+      <div style={{
+        position: 'absolute', top: 10, right: 12,
+        background: '#D4537E', color: 'white', borderRadius: '50%',
+        width: 22, height: 22, alignItems: 'center',
+        justifyContent: 'center', fontWeight: 800, fontSize: 13,
+        display: isSelected ? 'flex' : 'none',
+        animation: isSelected ? 'checkSpring 0.28s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none',
+        boxShadow: '0 2px 8px rgba(212,83,126,0.4)'
+      }}>✓</div>
+      <div style={{ fontWeight: 700, fontSize: 14, color: isSelected ? '#B83A64' : C.primary, marginBottom: 4 }}>{venue.name}</div>
       <div style={{ fontSize: 12, color: C.blue, fontWeight: 500, marginBottom: 6 }}>📍 {venue.area}</div>
       <div style={{ display: 'flex', gap: 10, fontSize: 12, flexWrap: 'wrap' }}>
         <span style={{ background: C.light, padding: '2px 8px', borderRadius: 6, color: C.primary, fontWeight: 600 }}>
           👥 Up to {venue.capacity.toLocaleString()} guests
         </span>
-        <span style={{ background: '#fff8e1', padding: '2px 8px', borderRadius: 6, color: '#7a5900', fontWeight: 700 }}>
+        <span style={{ background: isSelected ? '#FBE8EF' : '#fff8e1', padding: '2px 8px', borderRadius: 6, color: isSelected ? '#B83A64' : '#7a5900', fontWeight: 700 }}>
           {formatRupees(venue.cost_per_day)}/day
         </span>
       </div>
@@ -99,17 +113,18 @@ export default function Tab2Venue() {
   return (
     <div>
       {/* Venue Type */}
-      <div className="section-card">
+      <div className="section-card" style={sectionStyle(0)} data-section="venue-type">
         <div className="section-title">🏛️ Venue Type</div>
         <SingleImageSelector items={VENUE_TYPES} selected={wedding.venue_type}
-          onChange={(v) => update('venue_type', v)} />
+          onChange={(v) => { update('venue_type', v); scrollToNextSection('venue-type', 420) }} />
       </div>
 
       {/* Wedding City */}
-      <div className="section-card">
+      <div className="section-card" style={sectionStyle(1)} data-section="wedding-city">
         <div className="section-title">📍 Wedding City</div>
         <StateCitySelector stateKey="wedding_state" districtKey="wedding_district"
-          label="Wedding Location" wedding={wedding} update={update} />
+          label="Wedding Location" wedding={wedding} update={update}
+          onDistrictSelect={() => scrollToNextSection('wedding-city', 420)} />
         {wedding.wedding_district && (
           <div style={{ marginTop: 12, padding: '8px 14px', background: C.light,
             borderRadius: 10, fontSize: 13, color: C.primary, fontWeight: 600, display: 'inline-flex', gap: 8 }}>
@@ -120,7 +135,7 @@ export default function Tab2Venue() {
 
       {/* Mandapam Picker */}
       {wedding.wedding_district && (
-        <div className="section-card">
+        <div className="section-card" data-section="mandapam-picker">
           <div className="section-title">🏟️ Select Mandapam / Venue Hall</div>
           <div style={{ fontSize: 13, color: '#4a7a94', marginBottom: 16 }}>
             Popular venues in {wedding.wedding_district}. Prices are market estimates — verify directly with venue.
@@ -130,6 +145,7 @@ export default function Tab2Venue() {
             {mandapams.map(v => (
               <MandapamCard key={v.id} venue={v}
                 isSelected={wedding.mandapam_id === v.id}
+                hasAnySelected={!!wedding.mandapam_id && wedding.mandapam_id !== v.id}
                 onSelect={handleMandapamSelect} />
             ))}
           </div>
@@ -232,15 +248,43 @@ export default function Tab2Venue() {
       )}
 
       {/* Guests & Capacity */}
-      <div className="section-card">
+      <div className="section-card" data-section="guest-count">
         <div className="section-title">👥 Guests & Capacity</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18, marginBottom: 20 }}>
           <div style={{ background: C.light, borderRadius: 12, padding: 16 }}>
             <label className="form-label" style={{ color: C.primary }}>Total Guests</label>
-            <div style={{ fontSize: 11, color: C.blue, marginBottom: 8, fontWeight: 500 }}>Across all events combined</div>
-            <input type="number" className="form-input" value={wedding.total_guests || ''}
-              min={1} max={10000} placeholder="e.g. 500"
-              onChange={e => update('total_guests', parseInt(e.target.value) || 0)} />
+            <div style={{ fontSize: 11, color: C.blue, marginBottom: 10, fontWeight: 500 }}>Across all events combined</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <input type="range" min={50} max={2000} step={50}
+                value={wedding.total_guests || 50}
+                onChange={e => update('total_guests', parseInt(e.target.value))}
+                style={{ flex: 1, accentColor: '#D4537E', cursor: 'pointer' }} />
+              <input type="number" value={wedding.total_guests || ''}
+                onChange={e => update('total_guests', parseInt(e.target.value) || 0)}
+                style={{ width: 80, textAlign: 'center', padding: '6px 8px',
+                  border: '1.5px solid #EBEBEB', borderRadius: 8, fontSize: 14,
+                  fontFamily: 'inherit' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {[100, 200, 300, 500, 750, 1000].map(n => {
+                const sel = wedding.total_guests === n
+                return (
+                  <button key={n} onClick={() => update('total_guests', n)}
+                    style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      cursor: 'pointer', border: `1.5px solid ${sel ? '#D4537E' : '#EBEBEB'}`,
+                      background: sel ? '#FDF2F8' : 'white', color: sel ? '#D4537E' : '#555',
+                      transition: 'all 0.15s' }}>
+                    {n}
+                  </button>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: '#D4537E', fontWeight: 600 }}>
+              {(wedding.total_guests || 0) < 150 ? '🌿 Intimate gathering'
+                : (wedding.total_guests || 0) < 400 ? '✨ Mid-size wedding'
+                : (wedding.total_guests || 0) < 700 ? '💐 Large wedding'
+                : '👑 Grand wedding'}
+            </div>
           </div>
           <div style={{ background: '#f0fdfa', borderRadius: 12, padding: 16 }}>
             <label className="form-label" style={{ color: '#065F46' }}>Seating Capacity Required</label>
@@ -287,10 +331,10 @@ export default function Tab2Venue() {
       </div>
 
       {/* Accommodation */}
-      <div className="section-card">
+      <div className="section-card" data-section="accommodation">
         <div className="section-title">🛏️ Accommodation</div>
         <SingleImageSelector items={HOTEL_TIERS} selected={wedding.hotel_tier}
-          onChange={(v) => update('hotel_tier', v)} showCost />
+          onChange={(v) => { update('hotel_tier', v); scrollToNextSection('accommodation', 420) }} showCost />
 
         {wedding.hotel_tier && (wedding.outstation_guests || 0) > 0 && (
           <div style={{ marginTop: 16, padding: '14px 18px', background: '#e8f8f5',
@@ -331,7 +375,7 @@ export default function Tab2Venue() {
       </div>
 
       {/* Bride & Groom Hometowns */}
-      <div className="section-card">
+      <div className="section-card" data-section="hometowns">
         <div className="section-title">🏠 Bride &amp; Groom Hometowns</div>
         <div style={{ fontSize: 12, color: '#4a7a94', marginBottom: 16 }}>
           Used to calculate logistics & travel distance for transfers.
@@ -351,6 +395,31 @@ export default function Tab2Venue() {
             label="Groom" wedding={wedding} update={update} />
         </div>
       </div>
+
+      {/* Sticky Next button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          position: 'sticky', bottom: '1.5rem',
+          display: 'flex', justifyContent: 'center',
+          zIndex: 50, marginTop: '2rem'
+        }}
+      >
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('weddingNextTab'))}
+          style={{
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: '10px',
+            padding: '14px 40px', fontSize: '15px',
+            fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'inherit',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
+          }}
+        >
+          Next: Decor AI →
+        </button>
+      </motion.div>
     </div>
   )
 }

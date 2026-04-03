@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useWedding, ARTIST_TYPES, NAMED_ARTISTS, ALL_EVENTS, formatRupees } from '../context/WeddingContext'
+import { scrollToNextSection } from '../utils/scrollToNext'
 
 const C = { primary: '#023047', amber: '#ffb703', blue: '#219ebc', light: '#e8f4fa', sky: '#8ecae6', orange: '#fb8500' }
 
@@ -22,39 +24,47 @@ const ARTIST_COST_MAP = {
   'Fireworks Display':     [50000,   300000],
 }
 
-function ArtistCard({ artist, isSelected, onToggle }) {
+function ArtistCard({ artist, isSelected, onToggle, hasAnySelected }) {
   const [imgErr, setImgErr] = useState(false)
   const [lo, hi] = ARTIST_COST_MAP[artist.id] || [0, 0]
 
   return (
-    <div onClick={() => onToggle(artist)}
-      style={{ border: `2px solid ${isSelected ? C.amber : C.sky}`,
-        borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
-        background: isSelected ? '#fffbea' : 'white',
-        boxShadow: isSelected ? `0 0 0 3px rgba(255,183,3,0.2)` : 'none',
-        transition: 'all 0.2s', position: 'relative' }}>
+    <div
+      onClick={() => onToggle(artist)}
+      className={`sel-card${isSelected ? ' selected' : ''}${hasAnySelected && !isSelected ? ' dimmed' : ''}`}
+      style={{
+        border: `2px solid ${isSelected ? '#D4537E' : C.sky}`,
+        borderRadius: 16, overflow: 'hidden',
+        background: isSelected ? '#FDF2F8' : 'white',
+        boxShadow: isSelected ? '0 4px 20px rgba(212,83,126,0.12)' : 'none',
+      }}
+    >
       {artist.imageUrl && !imgErr ? (
         <img src={artist.imageUrl} alt={artist.label}
           onError={() => setImgErr(true)}
           style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
       ) : (
-        <div style={{ fontSize: 40, textAlign: 'center', padding: '20px 0 14px',
-          background: `linear-gradient(135deg, ${C.light}, #fffbea)` }}>
+        <div className="sel-card-icon" style={{ fontSize: 40, textAlign: 'center', padding: '20px 0 14px',
+          background: `linear-gradient(135deg, ${C.light}, #FBE8EF)` }}>
           {artist.emoji}
         </div>
       )}
       <div style={{ padding: '12px 14px 14px', textAlign: 'center' }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: C.primary }}>{artist.label}</div>
-        <div style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: isSelected ? '#B83A64' : C.primary }}>{artist.label}</div>
+        <div style={{ fontSize: 12, color: isSelected ? '#D4537E' : C.blue, fontWeight: 700 }}>
           {formatRupees(lo)} – {formatRupees(hi)}
         </div>
       </div>
-      {isSelected && (
-        <div style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24,
-          background: C.amber, borderRadius: '50%', color: C.primary,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 13, fontWeight: 'bold', boxShadow: `0 2px 8px rgba(255,183,3,0.5)` }}>✓</div>
-      )}
+      {/* Rose checkmark badge */}
+      <div style={{
+        position: 'absolute', top: 8, right: 8, width: 24, height: 24,
+        background: '#D4537E', borderRadius: '50%', color: 'white',
+        alignItems: 'center', justifyContent: 'center',
+        fontSize: 12, fontWeight: 'bold',
+        boxShadow: '0 2px 8px rgba(212,83,126,0.4)',
+        display: isSelected ? 'flex' : 'none',
+        animation: isSelected ? 'checkSpring 0.28s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none'
+      }}>✓</div>
     </div>
   )
 }
@@ -178,6 +188,7 @@ export default function Tab5Artists() {
     if (exists) next = selected.filter(s => s.id !== artist.id)
     else next = [...selected, artist]
     setSelected(next)
+    if (!exists) scrollToNextSection('artist-tier', 420)
 
     const costs = next.map(a => {
       const det = wedding.artist_events?.[a.id]
@@ -192,7 +203,10 @@ export default function Tab5Artists() {
   const toggleNamedArtist = (artist) => {
     const exists = namedArtistBookings.find(b => b.namedId === artist.id)
     if (exists) setNamedArtistBookings(nb => nb.filter(b => b.namedId !== artist.id))
-    else setNamedArtistBookings(nb => [...nb, { namedId: artist.id, negotiated: 0 }])
+    else {
+      setNamedArtistBookings(nb => [...nb, { namedId: artist.id, negotiated: 0 }])
+      scrollToNextSection('artist-select', 420)
+    }
   }
 
   const setNamedFee = (namedId, fee) => {
@@ -214,7 +228,7 @@ export default function Tab5Artists() {
   return (
     <div>
       {/* Named/Celebrity Artists */}
-      <div className="section-card">
+      <div className="section-card" data-section="artist-select">
         <div className="section-title">⭐ Named / Celebrity Artists</div>
         <div style={{ fontSize: 13, color: '#4a7a94', marginBottom: 14 }}>
           Book specific artists by name. Fee ranges are admin-maintained and reflect current market rates.
@@ -261,7 +275,7 @@ export default function Tab5Artists() {
       </div>
 
       {/* Generic Artist Types */}
-      <div className="section-card">
+      <div className="section-card" data-section="artist-tier">
         <div className="section-title">🎤 Artists & Entertainment</div>
         <div style={{ fontSize: 13, color: '#4a7a94', marginBottom: 14 }}>
           Select artist types for unnamed/generic bookings. Set negotiated fees in the schedule below.
@@ -270,6 +284,7 @@ export default function Tab5Artists() {
           {ARTIST_TYPES.map(artist => (
             <ArtistCard key={artist.id} artist={artist}
               isSelected={!!selected.find(s => s.id === artist.id)}
+              hasAnySelected={selected.length > 0 && !selected.find(s => s.id === artist.id)}
               onToggle={toggle} />
           ))}
         </div>
@@ -360,6 +375,31 @@ export default function Tab5Artists() {
           </div>
         </>
       )}
+
+      {/* Sticky Next button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          position: 'sticky', bottom: '1.5rem',
+          display: 'flex', justifyContent: 'center',
+          zIndex: 50, marginTop: '2rem'
+        }}
+      >
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('weddingNextTab'))}
+          style={{
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: '10px',
+            padding: '14px 40px', fontSize: '15px',
+            fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'inherit',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
+          }}
+        >
+          Next: Sundries →
+        </button>
+      </motion.div>
     </div>
   )
 }

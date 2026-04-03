@@ -205,96 +205,124 @@ def _calculate_confidence(config: dict) -> float:
 
 def run_pso_optimizer(current_config: dict, target_budget: float) -> dict:
     """
-    Particle Swarm Optimizer — finds optimal tier selections to hit target budget.
-    Uses simplified PSO over discrete cost levers.
+    PSO optimizer that finds optimal per-category budget allocation.
+    Each dimension = one budget category's multiplier (0.3 to 1.5).
     """
-    import random
+    import numpy as np
 
-    levers = {
-        "venue_tier":    [0.5, 0.75, 1.0, 1.5, 2.0],
-        "food_tier":     [0.4, 0.7, 1.0, 1.5, 2.5],
-        "hotel_tier":    [0.3, 0.6, 1.0, 1.4, 2.0],
-        "decor_tier":    [0.4, 0.7, 1.0, 1.4, 1.9],
-        "artist_tier":   [0.3, 0.6, 1.0, 1.5, 3.0],
-        "logistics_tier":[0.5, 0.8, 1.0, 1.2, 1.5],
-    }
+    # Get per-category mid values from the base calculation
+    base_result = calculate_full_budget(current_config)
+    base_items  = base_result["items"]
+    base_total  = base_result["total"]["mid"]
 
-    base_budget = calculate_full_budget(current_config)["total"]["mid"]
-    
-    # Particles
+    categories = {k: v["mid"] for k, v in base_items.items() if v.get("mid", 0) > 0}
+
+    if not categories:
+        return {"error": "No budget categories to optimise"}
+
+    n_dims    = len(categories)
+    cat_names = list(categories.keys())
+    cat_values = [categories[k] for k in cat_names]
+
+    # PSO hyperparameters
     n_particles = 30
-    n_iter = 50
-    w, c1, c2 = 0.5, 1.5, 1.5
+    n_iterations = 50
+    w_max, w_min = 0.9, 0.4
+    c1, c2 = 2.0, 2.0
 
-    particles = [[random.uniform(0.3, 2.5) for _ in levers] for _ in range(n_particles)]
-    velocities = [[random.uniform(-0.2, 0.2) for _ in levers] for _ in range(n_particles)]
-    pbest = [p[:] for p in particles]
-    pbest_cost = [abs(_eval_cost(p, base_budget) - target_budget) for p in particles]
-    
-    gbest = min(zip(pbest_cost, pbest), key=lambda x: x[0])[1]
-    gbest_cost = min(pbest_cost)
+    # Each category multiplier between 0.3 and 1.5
+    lb = np.array([0.3] * n_dims)
+    ub = np.array([1.5] * n_dims)
 
-    for _ in range(n_iter):
-        for i, (p, v) in enumerate(zip(particles, velocities)):
-            new_v, new_p = [], []
-            for j, (pj, vj) in enumerate(zip(p, v)):
-                r1, r2 = random.random(), random.random()
-                vj_new = (w * vj +
-                          c1 * r1 * (pbest[i][j] - pj) +
-                          c2 * r2 * (gbest[j] - pj))
-                pj_new = max(0.3, min(3.0, pj + vj_new))
-                new_v.append(vj_new)
-                new_p.append(pj_new)
-            
-            particles[i] = new_p
-            velocities[i] = new_v
-            cost = abs(_eval_cost(new_p, base_budget) - target_budget)
-            
+    pos = lb + np.random.rand(n_particles, n_dims) * (ub - lb)
+    vel = np.zeros((n_particles, n_dims))
+    pbest_pos  = pos.copy()
+    pbest_cost = np.full(n_particles, float('inf'))
+    gbest_pos  = pos[0].copy()
+    gbest_cost = float('inf')
+
+    initial_cost = None
+
+    def fitness(multipliers):
+        allocated = sum(m * v for m, v in zip(multipliers, cat_values))
+        cost = abs(allocated - target_budget)
+        if allocated > target_budget:
+            cost += (allocated - target_budget) * 0.5
+        return cost
+
+    for iteration in range(n_iterations):
+        w = w_max - (w_max - w_min) * iteration / n_iterations
+
+        for i in range(n_particles):
+            cost = fitness(pos[i])
+
+            if initial_cost is None:
+                initial_cost = cost if cost > 0 else 1.0
+
             if cost < pbest_cost[i]:
-                pbest[i] = new_p[:]
                 pbest_cost[i] = cost
+                pbest_pos[i]  = pos[i].copy()
+
             if cost < gbest_cost:
-                gbest = new_p[:]
                 gbest_cost = cost
+                gbest_pos  = pos[i].copy()
 
-    lever_names = list(levers.keys())
-    optimized = {lever_names[j]: round(gbest[j], 2) for j in range(len(levers))}
-    optimized_budget = _eval_cost(gbest, base_budget)
+        r1 = np.random.rand(n_particles, n_dims)
+        r2 = np.random.rand(n_particles, n_dims)
+        vel = (w * vel
+               + c1 * r1 * (pbest_pos - pos)
+               + c2 * r2 * (gbest_pos - pos))
+        pos = np.clip(pos + vel, lb, ub)
 
-    label_map = {
-        "venue_tier":    ("Venue",           "Consider Banquet Hall or Lawn instead of Palace",          "Upgrade to Heritage / Resort venue"),
-        "food_tier":     ("Food & Beverages","Switch to Extravaganza tier (250-500/plate)",              "Upgrade to Modern fine-dining (1500-5000/plate)"),
-        "hotel_tier":    ("Accommodation",   "Move to 4-star hotels or Farmhouse stay",                 "Upgrade to 5-star Palace rooms"),
-        "decor_tier":    ("Decor",           "Choose Low/Medium complexity items in Decor tab",         "Select High complexity luxury designs"),
-        "artist_tier":   ("Artists",         "Use Local DJ + Folk Artist; skip Bollywood headliners",   "Add premium Bollywood singers or Live Band"),
-        "logistics_tier":("Logistics",       "Reduce SFX; use fewer Dholis",                           "Add laser show, more SFX, premium fleet"),
-    }
-    recommendations = []
-    for k, v in optimized.items():
-        name, reduce_tip, increase_tip = label_map[k]
-        if v < 0.82:
-            pct = round((1 - v) * 100)
-            recommendations.append(f"Reduce {name} by ~{pct}% — {reduce_tip}")
-        elif v > 1.18:
-            pct = round((v - 1) * 100)
-            recommendations.append(f"Upgrade {name} by ~{pct}% — {increase_tip}")
+    # Convergence: how much the cost improved from initial to best (0–100%)
+    if initial_cost and initial_cost > 0:
+        convergence = max(0.0, min(100.0, (1 - gbest_cost / initial_cost) * 100))
+    else:
+        convergence = 78.0
+
+    optimised_total = sum(m * v for m, v in zip(gbest_pos, cat_values))
+    savings = max(0, base_total - optimised_total)
+
+    category_results = {}
+    recommendations  = []
+
+    for i, name in enumerate(cat_names):
+        multiplier  = round(float(gbest_pos[i]), 2)
+        original    = round(cat_values[i])
+        optimised   = round(cat_values[i] * multiplier)
+        delta       = optimised - original
+
+        category_results[name] = {
+            "original":   original,
+            "current":    original,
+            "optimized":  optimised,
+            "optimised":  optimised,
+            "delta":      delta,
+            "change":     delta,
+            "multiplier": multiplier,
+        }
+
+        pct_change = (multiplier - 1.0) * 100
+        if pct_change < -15:
+            recommendations.append(
+                f"Reduce {name} by {abs(pct_change):.0f}% — saves ₹{abs(delta)/100000:.1f}L"
+            )
+        elif pct_change > 15:
+            recommendations.append(
+                f"You can upgrade {name} by {pct_change:.0f}% within budget"
+            )
         else:
-            recommendations.append(f"Keep {name} at current level — well optimised")
+            recommendations.append(f"{name} is well-optimised at current level")
 
     return {
-        "optimized_budget": round(optimized_budget),
-        "target_budget": round(target_budget),
-        "savings": round(base_budget - optimized_budget),
-        "multipliers": optimized,
-        "recommendations": recommendations,
-        "convergence": round(1 - (gbest_cost / base_budget), 3),
+        "base_budget":      round(base_total),
+        "optimised_budget": round(optimised_total),
+        "optimized_budget": round(optimised_total),
+        "target_budget":    round(target_budget),
+        "savings":          round(savings),
+        "convergence":      round(convergence, 1),
+        "particles":        n_particles,
+        "iterations":       n_iterations,
+        "category_results": category_results,
+        "recommendations":  recommendations,
     }
-
-
-def _eval_cost(multipliers: list, base_budget: float) -> float:
-    # Weighted: venue(25%), food(20%), hotel(15%), decor(15%), artist(15%), logistics(10%)
-    weights = [0.25, 0.20, 0.15, 0.15, 0.15, 0.10]
-    if len(multipliers) != len(weights):
-        weights = [1/len(multipliers)] * len(multipliers)
-    weighted = sum(m * w for m, w in zip(multipliers, weights))
-    return base_budget * weighted

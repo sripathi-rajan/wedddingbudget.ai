@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useWedding, FOOD_CATEGORIES, FOOD_TIERS, BAR_TYPES, SPECIALTY_COUNTERS,
   FOOD_MENU, MEAL_TYPES, ALL_EVENTS, DISH_PRICES, formatRupees } from '../context/WeddingContext'
 import { MultiImageSelector, SingleImageSelector } from '../components/ImageCard'
+import { scrollToNextSection } from '../utils/scrollToNext'
 
 const C = { primary: '#023047', amber: '#ffb703', blue: '#219ebc', light: '#e8f4fa', sky: '#8ecae6', orange: '#fb8500' }
 
@@ -287,17 +289,17 @@ export default function Tab4Food() {
   return (
     <div>
       {/* Food Category */}
-      <div className="section-card">
+      <div className="section-card" data-section="meal-tier">
         <div className="section-title">🥗 Food Category</div>
         <MultiImageSelector items={FOOD_CATEGORIES} selected={wedding.food_categories || []}
-          onChange={v => update('food_categories', v)} />
+          onChange={v => { update('food_categories', v); scrollToNextSection('meal-tier', 420) }} />
       </div>
 
       {/* Food Budget Tier */}
-      <div className="section-card">
+      <div className="section-card" data-section="food-budget">
         <div className="section-title">🍽️ Food Budget Tier</div>
         <SingleImageSelector items={FOOD_TIERS} selected={wedding.food_budget_tier}
-          onChange={v => update('food_budget_tier', v)} showCost />
+          onChange={v => { update('food_budget_tier', v); scrollToNextSection('food-budget', 420) }} showCost />
         {wedding.food_budget_tier && (
           <div style={{ marginTop: 12, padding: 12, background: C.light, borderRadius: 10, fontSize: 12, color: C.blue }}>
             Cost is now calculated per dish × covers. Select dishes per event below.
@@ -306,14 +308,14 @@ export default function Tab4Food() {
       </div>
 
       {/* Bar Type */}
-      <div className="section-card">
+      <div className="section-card" data-section="bar-type">
         <div className="section-title">🍸 Bar Type</div>
         <SingleImageSelector items={BAR_TYPES} selected={wedding.bar_type}
-          onChange={v => update('bar_type', v)} showCost />
+          onChange={v => { update('bar_type', v); scrollToNextSection('bar-type', 420) }} showCost />
       </div>
 
       {/* Specialty Counters */}
-      <div className="section-card">
+      <div className="section-card" data-section="specialty-counters">
         <div className="section-title">🎪 Specialty Counters</div>
         <div style={{ fontSize: 12, color: '#4a7a94', marginBottom: 12 }}>
           All counters priced per head × total guests ({totalGuests} guests)
@@ -450,6 +452,31 @@ export default function Tab4Food() {
           </div>
         </div>
       )}
+
+      {/* Sticky Next button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          position: 'sticky', bottom: '1.5rem',
+          display: 'flex', justifyContent: 'center',
+          zIndex: 50, marginTop: '2rem'
+        }}
+      >
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('weddingNextTab'))}
+          style={{
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: '10px',
+            padding: '14px 40px', fontSize: '15px',
+            fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'inherit',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
+          }}
+        >
+          Next: Artists →
+        </button>
+      </motion.div>
     </div>
   )
 }

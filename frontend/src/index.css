@@ -1,20 +1,54 @@
-@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap');
+/* ── Nuclear white background reset ────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  background: #ffffff !important;
+  min-height: 100vh;
+}
+
+@media (max-width: 640px) {
+  body, #root, .app, [class*="wrapper"],
+  [class*="container"], [class*="layout"],
+  [class*="page"], [class*="content"] {
+    background: #ffffff !important;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* ── New Palette ── */
-  --sky-blue:        #8ecae6;
-  --sky-blue-light:  #e8f4fa;
-  --sky-blue-dark:   #51aed9;
-  --blue-green:      #219ebc;
-  --blue-green-dark: #0d3e4b;
-  --deep-space:      #023047;
-  --deep-space-light:#04699b;
-  --amber:           #ffb703;
-  --amber-dark:      #d09500;
-  --amber-light:     #fff1cd;
-  --orange:          #fb8500;
-  --orange-dark:     #c86b00;
-  --orange-light:    #ffe7cb;
+  /* ── New Design System (DM Sans · White · Rose) ── */
+  --font-sans:       'DM Sans', 'Inter', sans-serif;
+  --font-serif:      'EB Garamond', serif;
+
+  --c-bg:            #FFFFFF;
+  --c-surface:       #FFFFFF;
+  --c-text:          #111111;
+  --c-text-muted:    #666666;
+  --c-text-faint:    #999999;
+  --c-border:        #EBEBEB;
+
+  --c-rose:          #D4537E;
+  --c-rose-light:    #FBE8EF;
+  --c-rose-dark:     #B83A64;
+  --c-rose-border:   #F2C4D4;
+
+  /* ── Planner Palette (kept for existing tabs) ── */
+  --sky-blue:        #EBEBEB;
+  --sky-blue-light:  #FDF2F8;
+  --sky-blue-dark:   #D4537E;
+  --blue-green:      #D4537E;
+  --blue-green-dark: #B83A64;
+  --deep-space:      #111111;
+  --deep-space-light:#333333;
+  --amber:           #D4537E;
+  --amber-dark:      #B83A64;
+  --amber-light:     #FDF2F8;
+  --orange:          #D4537E;
+  --orange-dark:     #B83A64;
+  --orange-light:    #FDF2F8;
 
   /* ── Semantic aliases ── */
   --primary:         var(--blue-green);
@@ -26,19 +60,19 @@
   --gold:            var(--amber);
   --gold-light:      var(--amber-light);
   --gold-dark:       var(--orange-dark);
-  --rose:            #E11D48;
-  --rose-light:      #FFE4E6;
+  --rose:            var(--c-rose);
+  --rose-light:      var(--c-rose-light);
   --teal:            var(--blue-green);
   --teal-light:      #ceeef6;
-  --ivory:           #f6fbfd;
-  --ivory-dark:      #dceef7;
+  --ivory:           #ffffff;
+  --ivory-dark:      #ffffff;
   --charcoal:        var(--deep-space);
   --muted:           #4a7a94;
   --border:          var(--sky-blue);
   --card-bg:         #ffffff;
-  --shadow:          0 4px 24px rgba(2,48,71,0.10);
-  --shadow-hover:    0 8px 40px rgba(2,48,71,0.22);
-  --radius:          18px;
+  --shadow:          0 4px 16px rgba(0,0,0,0.06);
+  --shadow-hover:    0 8px 30px rgba(0,0,0,0.12);
+  --radius:          16px;
   --radius-sm:       12px;
 }
 
@@ -46,14 +80,11 @@
 
 body {
   font-family: 'Inter', sans-serif;
-  background: var(--ivory);
+  background: #ffffff;
   color: var(--charcoal);
   min-height: 100vh;
   font-size: 15px;
   line-height: 1.6;
-  background-image:
-    radial-gradient(circle at 10% 20%, rgba(142,202,230,0.12) 0%, transparent 50%),
-    radial-gradient(circle at 90% 80%, rgba(255,183,3,0.08) 0%, transparent 50%);
 }
 
 h1, h2, h3 { font-family: 'EB Garamond', serif; }
@@ -71,7 +102,7 @@ h1, h2, h3 { font-family: 'EB Garamond', serif; }
   padding: 6px;
   background: white;
   border-radius: 16px;
-  border: 1.5px solid var(--sky-blue);
+  border: 1px solid var(--c-border);
   flex-wrap: wrap;
   box-shadow: 0 2px 12px rgba(2,48,71,0.08);
 }
@@ -82,23 +113,23 @@ h1, h2, h3 { font-family: 'EB Garamond', serif; }
   background: transparent;
   border-radius: 12px;
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 13px;
   font-weight: 600;
-  color: var(--muted);
+  color: #888;
   transition: all 0.25s ease;
   white-space: nowrap;
 }
 
 .tab-btn.active {
-  background: linear-gradient(135deg, var(--deep-space), var(--blue-green-dark));
-  color: white;
-  box-shadow: 0 4px 14px rgba(2,48,71,0.35);
+  background: #FDF2F8;
+  color: #D4537E;
+  box-shadow: 0 1px 4px rgba(212,83,126,0.1);
 }
 
 .tab-btn:hover:not(.active) {
-  background: var(--primary-light);
-  color: var(--deep-space);
+  background: #FDF2F8;
+  color: #D4537E;
 }
 
 /* Image card selector */
@@ -110,7 +141,7 @@ h1, h2, h3 { font-family: 'EB Garamond', serif; }
 
 .image-card {
   border-radius: var(--radius-sm);
-  border: 2px solid var(--sky-blue);
+  border: 1px solid var(--c-border);
   overflow: hidden;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -126,7 +157,13 @@ h1, h2, h3 { font-family: 'EB Garamond', serif; }
 .image-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
-  border-color: var(--blue-green);
+  border-color: #D4537E;
+}
+
+.selection-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
 .image-card img {
@@ -179,7 +216,7 @@ h1, h2, h3 { font-family: 'EB Garamond', serif; }
 /* Section cards */
 .section-card {
   background: var(--card-bg);
-  border: 1.5px solid var(--sky-blue);
+  border: 1px solid var(--c-border);
   border-radius: var(--radius);
   padding: 28px;
   box-shadow: var(--shadow);
@@ -217,43 +254,43 @@ h1, h2, h3 { font-family: 'EB Garamond', serif; }
 .form-input {
   width: 100%;
   padding: 11px 14px;
-  border: 1.5px solid var(--sky-blue);
+  border: 1px solid var(--c-border);
   border-radius: var(--radius-sm);
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   background: white;
-  color: var(--charcoal);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  color: #111;
+  transition: all 0.2s;
   outline: none;
 }
 
 .form-input:focus {
-  border-color: var(--blue-green);
-  box-shadow: 0 0 0 3px rgba(33,158,188,0.15);
+  border-color: var(--c-rose);
+  box-shadow: 0 0 0 3px rgba(212,83,126,0.1);
 }
 
 .form-select {
   width: 100%;
   padding: 11px 14px;
-  border: 1.5px solid var(--sky-blue);
+  border: 1px solid var(--c-border);
   border-radius: var(--radius-sm);
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   background: white;
-  color: var(--charcoal);
+  color: #111;
   cursor: pointer;
   outline: none;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23219ebc' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23D4537E' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
   padding-right: 38px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: all 0.2s;
 }
 
 .form-select:focus {
-  border-color: var(--blue-green);
-  box-shadow: 0 0 0 3px rgba(33,158,188,0.15);
+  border-color: var(--c-rose);
+  box-shadow: 0 0 0 3px rgba(212,83,126,0.1);
 }
 
 /* Primary button */
@@ -300,6 +337,7 @@ h1, h2, h3 { font-family: 'EB Garamond', serif; }
 /* Range slider */
 .range-slider {
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 6px;
   border-radius: 3px;
@@ -346,4 +384,324 @@ h1, h2, h3 { font-family: 'EB Garamond', serif; }
   .image-grid { grid-template-columns: repeat(2, 1fr); }
   .section-card { padding: 18px; }
   .tab-btn { padding: 7px 12px; font-size: 12px; }
+}
+
+@media (max-width: 768px) {
+  /* Navbar: hide tab labels, show only icons */
+  .tab-label { display: none; }
+
+  /* Stack any side-by-side layouts */
+  .budget-sidebar {
+    position: static !important;
+    width: 100% !important;
+    margin-top: 1rem;
+  }
+
+  /* Selection grids: 3 columns max on mobile */
+  .selection-grid, [class*="grid"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Full-width buttons on mobile */
+  button[style*="padding: 14px"] {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Larger touch targets */
+  button { min-height: 44px; }
+
+  /* Reduce heading sizes */
+  h1 { font-size: 1.6rem !important; }
+  h2 { font-size: 1.2rem !important; }
+}
+
+/* ── Premium card selection system ──────────────────────────────────────────── */
+.sel-card {
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1),
+              border-color 0.18s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.18s cubic-bezier(0.34,1.56,0.64,1),
+              opacity 0.18s ease,
+              background 0.18s ease;
+}
+.sel-card:hover {
+  transform: translateY(-6px);
+  border-color: #D4537E !important;
+  box-shadow: 0 8px 32px rgba(212,83,126,0.15) !important;
+}
+.sel-card:hover .sel-card-icon {
+  transform: scale(1.15);
+}
+.sel-card .sel-card-icon {
+  transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1);
+  display: inline-block;
+}
+.sel-card.selected {
+  border-color: #D4537E !important;
+  background: #FDF2F8 !important;
+}
+.sel-card.selected .sel-card-icon {
+  animation: iconBounce 0.3s ease forwards;
+}
+.sel-card.dimmed {
+  opacity: 0.6;
+  filter: grayscale(20%);
+}
+.sel-card .check-badge-rose {
+  display: none;
+}
+.sel-card.selected .check-badge-rose {
+  display: flex;
+  animation: checkSpring 0.28s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+
+/* Legacy card selectors — keep working */
+.image-card {
+  transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1),
+              border-color 0.18s ease,
+              box-shadow 0.18s ease;
+  cursor: pointer;
+}
+.image-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 8px 32px rgba(212,83,126,0.15);
+  border-color: #D4537E !important;
+}
+.image-card.selected {
+  border-color: #D4537E !important;
+  background: #FDF2F8 !important;
+}
+.image-card.selected .check-badge { opacity: 1; }
+.image-card:hover img { transform: scale(1.05); transition: transform 0.2s ease; }
+
+/* ── Button press feel ──────────────────────────────────────────────────────── */
+button { transition: transform 0.1s ease; }
+button:active { transform: scale(0.95) !important; }
+
+/* ── Rose focus ring on all inputs ─────────────────────────────────────────── */
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: #D4537E !important;
+  box-shadow: 0 0 0 3px rgba(212,83,126,0.15) !important;
+  transition: all 0.15s ease;
+}
+
+/* ── Icon bounce on select ──────────────────────────────────────────────────── */
+@keyframes iconBounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.3); }
+  70%  { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+
+/* ── Checkmark badge spring-in ──────────────────────────────────────────────── */
+@keyframes checkSpring {
+  0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+  60%  { transform: scale(1.25) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.check-badge-rose {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 22px; height: 22px;
+  background: #D4537E;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(212,83,126,0.4);
+  z-index: 2;
+}
+
+/* ── Section stagger reveal on mount ───────────────────────────────────────── */
+.section-reveal {
+  animation: sectionReveal 0.5s cubic-bezier(0.16,1,0.3,1) both;
+}
+@keyframes sectionReveal {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Section pulse to draw attention ───────────────────────────────────────── */
+@keyframes sectionPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(212,83,126,0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(212,83,126,0); }
+  100% { box-shadow: 0 0 0 0 rgba(212,83,126,0); }
+}
+.pulse-once {
+  animation: sectionPulse 0.7s ease-out;
+}
+
+/* ── Scroll offset for sticky navbar ───────────────────────────────────────── */
+[data-section] {
+  scroll-margin-top: 72px;
+}
+
+/* ── Mobile fixes (≤ 640px) ─────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Fix 2: Navbar tab strip scrollable */
+  .nav-tab-strip {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+  .nav-tab-strip::-webkit-scrollbar { display: none; }
+  .nav-tab-label { display: none !important; }
+  .nav-tab-icon { display: inline !important; }
+  .logo-text { display: none !important; }
+  .nav-right-chips { display: none !important; }
+
+  .top-nav {
+    padding: 0 8px !important;
+    gap: 8px !important;
+    justify-content: center !important;
+  }
+  .top-nav .logo-wrapper {
+    position: absolute !important;
+    left: 12px !important;
+  }
+  .nav-tab-strip {
+    margin: 0 auto !important;
+  }
+
+  /* Fix 3: sel-card compact on mobile */
+  .sel-card {
+    padding: 12px 8px !important;
+    min-height: 80px !important;
+  }
+  .sel-card .sel-card-icon {
+    font-size: 22px !important;
+  }
+  .sel-card .card-label {
+    font-size: 11px !important;
+  }
+
+  /* Fix 4: Tighter page padding */
+  .tab-content, [class*="tab-content"] {
+    padding: 16px 12px !important;
+  }
+
+  /* Section cards less padded */
+  .info-card, [class*="section-card"] {
+    padding: 14px !important;
+    border-radius: 12px !important;
+    margin-bottom: 12px !important;
+  }
+
+  /* Section titles smaller */
+  h2 { font-size: 1rem !important; }
+  h3 { font-size: 0.95rem !important; }
+
+  /* Wedding date input full width */
+  input[type="date"] {
+    width: 100% !important;
+  }
+
+  /* Fix 5: Progress dots spacing */
+  .progress-dots {
+    gap: 4px !important;
+  }
+  .progress-dot {
+    width: 6px !important;
+    height: 6px !important;
+  }
+}
+
+/* ── Fix 1: Wedding type grid — 2 columns on mobile ────────────────────────── */
+@media (max-width: 640px) {
+  .wedding-type-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+}
+
+/* ── Fix 2: Budget style cards — horizontal rows on mobile ─────────────────── */
+@media (max-width: 640px) {
+  .budget-style-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .budget-style-card {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 14px 16px !important;
+    text-align: left !important;
+  }
+  .budget-style-card .card-icon {
+    font-size: 28px !important;
+    flex-shrink: 0 !important;
+  }
+  .budget-style-card .card-label {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+  }
+  .budget-style-card .card-desc {
+    font-size: 12px !important;
+    color: #888 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* ── Fix 3: Venue image cards ───────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .image-card img {
+    height: 80px !important;
+    width: 100% !important;
+    object-fit: cover !important;
+    border-radius: 8px 8px 0 0 !important;
+  }
+  .image-card .card-label {
+    font-size: 10px !important;
+    line-height: 1.3 !important;
+    text-align: center !important;
+    padding: 4px !important;
+    word-break: break-word !important;
+    hyphens: auto !important;
+  }
+  .image-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+  }
+}
+
+/* ── Fix 5: Generate My Budget button ──────────────────────────────────────── */
+@media (max-width: 640px) {
+  .generate-btn {
+    font-size: 14px !important;
+    padding: 12px 16px !important;
+    white-space: nowrap !important;
+    width: 100% !important;
+  }
+}
+
+/* ── Fix 6: Prevent all card labels from getting cut off ───────────────────── */
+@media (max-width: 640px) {
+  .sel-card, [class*="card"] {
+    overflow: visible !important;
+  }
+
+  [class*="card"] [class*="label"],
+  [class*="card"] p,
+  [class*="card"] span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+  }
+
+  [class*="grid"] {
+    gap: 8px !important;
+  }
 }

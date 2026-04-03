@@ -167,7 +167,10 @@ function fmt(n) {
 function AdminPageInner({ onClose }) {
   const [activeSection, setActiveSection] = useState('dashboard')
   const [apiStatus, setApiStatus] = useState('checking')
-
+  const [labelImages, setLabelImages] = useState([])
+  const [labelEdits, setLabelEdits] = useState({})
+  const [labelSaving, setLabelSaving] = useState({})
+  const [labelSaved, setLabelSaved] = useState({})
 
   useEffect(() => {
     fetch(`${API}/admin/`)
@@ -176,10 +179,52 @@ function AdminPageInner({ onClose }) {
       .catch(() => setApiStatus('offline'))
   }, [])
 
+  useEffect(() => {
+    if (activeSection !== 'label-images') return
+    fetch(`${API}/admin/images`)
+      .then(r => r.json())
+      .then(d => {
+        setLabelImages(d.images || [])
+        const edits = {}
+        for (const img of d.images || []) {
+          edits[img.filename] = {
+            category: img.category || 'Mandap',
+            complexity: img.complexity || 'Simple',
+            cost: img.cost != null ? img.cost : '',
+          }
+        }
+        setLabelEdits(edits)
+      })
+      .catch(() => {})
+  }, [activeSection])
+
+  const handleLabelChange = (filename, field, value) => {
+    setLabelEdits(prev => ({ ...prev, [filename]: { ...prev[filename], [field]: value } }))
+  }
+
+  const handleLabelSave = async (filename) => {
+    const edit = labelEdits[filename] || {}
+    setLabelSaving(prev => ({ ...prev, [filename]: true }))
+    try {
+      const res = await fetch(`${API}/admin/label`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, category: edit.category, complexity: edit.complexity, cost: Number(edit.cost) }),
+      })
+      if (res.ok) {
+        setLabelSaved(prev => ({ ...prev, [filename]: true }))
+        setTimeout(() => setLabelSaved(prev => ({ ...prev, [filename]: false })), 2000)
+      }
+    } finally {
+      setLabelSaving(prev => ({ ...prev, [filename]: false }))
+    }
+  }
+
   const sections = [
     { id:'dashboard', label:'Dashboard', icon:'📊' },
     { id:'cost-tables', label:'Cost Tables', icon:'💰' },
     { id:'ml-model', label:'ML Model', icon:'🤖' },
+    { id:'label-images', label:'Label Images', icon:'🏷️' },
     { id:'settings', label:'Settings', icon:'⚙️' },
   ]
 
@@ -437,6 +482,97 @@ function AdminPageInner({ onClose }) {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* LABEL IMAGES */}
+          {activeSection === 'label-images' && (
+            <div style={{ fontFamily: 'DM Sans, sans-serif' }}>
+              <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: '#1a1a1a' }}>
+                Label Images
+              </h2>
+              <p style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>
+                Assign category, complexity and cost to each decor image for ML training.
+              </p>
+              {labelImages.length === 0 ? (
+                <div style={{ background: '#fff', border: '1px solid #EBEBEB', borderRadius: 12,
+                  padding: '40px', textAlign: 'center', color: '#aaa', fontSize: 14 }}>
+                  No images found in <code>decor_dataset/data/images/</code>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+                  {labelImages.map(img => {
+                    const edit = labelEdits[img.filename] || {}
+                    const saving = labelSaving[img.filename]
+                    const saved = labelSaved[img.filename]
+                    const imgUrl = `${API.replace('/api', '')}/decor_dataset/data/images/${img.filename}`
+                    return (
+                      <div key={img.filename} style={{ background: '#fff', border: '1px solid #EBEBEB',
+                        borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                        <div style={{ height: 180, background: '#f8f8f8', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                          <img src={imgUrl} alt={img.filename}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={e => { e.target.style.display = 'none' }} />
+                        </div>
+                        <div style={{ padding: '14px 16px' }}>
+                          <div style={{ fontSize: 11, color: '#aaa', marginBottom: 12,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {img.filename}
+                          </div>
+                          <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>
+                              Category
+                            </label>
+                            <select value={edit.category || 'Mandap'}
+                              onChange={e => handleLabelChange(img.filename, 'category', e.target.value)}
+                              style={{ width: '100%', padding: '7px 10px', borderRadius: 8,
+                                border: '1px solid #EBEBEB', fontSize: 13, fontFamily: 'DM Sans, sans-serif',
+                                color: '#333', outline: 'none', background: '#fafafa' }}>
+                              {['Mandap','Stage','Entrance','Floral','Reception','Table'].map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>
+                              Complexity
+                            </label>
+                            <select value={edit.complexity || 'Simple'}
+                              onChange={e => handleLabelChange(img.filename, 'complexity', e.target.value)}
+                              style={{ width: '100%', padding: '7px 10px', borderRadius: 8,
+                                border: '1px solid #EBEBEB', fontSize: 13, fontFamily: 'DM Sans, sans-serif',
+                                color: '#333', outline: 'none', background: '#fafafa' }}>
+                              {['Simple','Medium','Elaborate'].map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={{ marginBottom: 14 }}>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>
+                              Cost (₹)
+                            </label>
+                            <input type="number" min="0" value={edit.cost}
+                              onChange={e => handleLabelChange(img.filename, 'cost', e.target.value)}
+                              placeholder="e.g. 150000"
+                              style={{ width: '100%', padding: '7px 10px', borderRadius: 8,
+                                border: '1px solid #EBEBEB', fontSize: 13, fontFamily: 'DM Sans, sans-serif',
+                                color: '#333', outline: 'none', background: '#fafafa', boxSizing: 'border-box' }} />
+                          </div>
+                          <button onClick={() => handleLabelSave(img.filename)} disabled={saving}
+                            style={{ width: '100%', padding: '9px', borderRadius: 9, border: 'none',
+                              background: saved ? '#e8f5e9' : '#D4537E', color: saved ? '#2e7d32' : '#fff',
+                              fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer',
+                              fontFamily: 'DM Sans, sans-serif', transition: 'background 0.2s',
+                              opacity: saving ? 0.7 : 1 }}>
+                            {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 

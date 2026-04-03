@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useWedding, formatRupees } from '../context/WeddingContext'
+import { scrollToNextSection } from '../utils/scrollToNext'
 
 const API = 'http://localhost:8000/api'
 
@@ -34,28 +36,30 @@ function localPredict(item) {
   return { predicted: p, low: Math.round(p*0.8), high: Math.round(p*1.2) }
 }
 
-function DecorCard({ item, isSel, onToggle }) {
+function DecorCard({ item, isSel, onToggle, hasAnySelected }) {
   const [imgErr, setImgErr] = useState(false)
   const p = localPredict(item)
   return (
-    <div onClick={() => onToggle(item)} style={{
-      border:`2px solid ${isSel?'var(--primary)':'var(--border)'}`,
-      borderRadius:16, overflow:'hidden', cursor:'pointer',
-      background: isSel ? 'var(--primary-light)' : 'white',
-      boxShadow: isSel ? '0 4px 20px rgba(255,183,3,0.25)' : '0 2px 8px rgba(0,0,0,0.04)',
-      transform: isSel ? 'translateY(-2px)' : 'none',
-      transition:'all 0.22s', position:'relative'
-    }}>
+    <div
+      onClick={() => onToggle(item)}
+      className={`sel-card${isSel ? ' selected' : ''}${hasAnySelected && !isSel ? ' dimmed' : ''}`}
+      style={{
+        border:`2px solid ${isSel ? '#D4537E' : 'var(--border)'}`,
+        borderRadius:16, overflow:'hidden',
+        background: isSel ? '#FDF2F8' : 'white',
+        boxShadow: isSel ? '0 4px 24px rgba(212,83,126,0.15)' : '0 2px 8px rgba(0,0,0,0.04)',
+      }}
+    >
       {item.imageUrl && !imgErr ? (
         <img src={item.imageUrl} alt={item.name}
           onError={() => setImgErr(true)}
           style={{ width:'100%', height:140, objectFit:'cover', display:'block' }} />
       ) : (
-        <div style={{ fontSize:52, textAlign:'center', padding:'24px 0 14px',
+        <div className="sel-card-icon" style={{ fontSize:52, textAlign:'center', padding:'24px 0 14px',
           background:'linear-gradient(160deg,var(--ivory-dark),var(--primary-light))' }}>{item.emoji}</div>
       )}
       <div style={{ padding:'12px 14px 14px' }}>
-        <div style={{ fontWeight:700, fontSize:13, marginBottom:8, lineHeight:1.3 }}>{item.name}</div>
+        <div style={{ fontWeight:700, fontSize:13, marginBottom:8, lineHeight:1.3, color: isSel ? '#B83A64' : '#111' }}>{item.name}</div>
         <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:10 }}>
           <span style={{ fontSize:10, padding:'3px 9px', borderRadius:10, fontWeight:700,
             background:COMPLEXITY_COLOR[item.complexity]+'20', color:COMPLEXITY_COLOR[item.complexity] }}>
@@ -66,19 +70,22 @@ function DecorCard({ item, isSel, onToggle }) {
             {item.style}
           </span>
         </div>
-        <div style={{ fontFamily:'EB Garamond,serif', fontSize:19, fontWeight:700, color:'var(--primary)' }}>
+        <div style={{ fontFamily:'EB Garamond,serif', fontSize:19, fontWeight:700, color: isSel ? '#D4537E' : 'var(--primary)' }}>
           {formatRupees(p.predicted)}
         </div>
         <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>
           {formatRupees(p.low)} – {formatRupees(p.high)}
         </div>
       </div>
-      {isSel && (
-        <div style={{ position:'absolute', top:10, right:10, width:28, height:28,
-          background:'var(--primary)', borderRadius:'50%', display:'flex',
-          alignItems:'center', justifyContent:'center', color:'white', fontWeight:'bold', fontSize:14,
-          boxShadow:'0 2px 8px rgba(255,183,3,0.5)' }}>✓</div>
-      )}
+      {/* Rose checkmark badge */}
+      <div style={{
+        position:'absolute', top:10, right:10, width:26, height:26,
+        background:'#D4537E', borderRadius:'50%',
+        alignItems:'center', justifyContent:'center', color:'white', fontWeight:'bold', fontSize:13,
+        boxShadow:'0 2px 8px rgba(212,83,126,0.4)',
+        display: isSel ? 'flex' : 'none',
+        animation: isSel ? 'checkSpring 0.28s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none'
+      }}>✓</div>
     </div>
   )
 }
@@ -102,6 +109,7 @@ export default function Tab3Decor() {
     setSelected(next)
     update('decor_total', next.reduce((s,i) => s + i.predicted, 0))
     update('selected_decor', next.map(s => s.name))
+    if (!exists) scrollToNextSection('decor-upload', 420)
   }
 
   const handlePredict = async () => {
@@ -167,7 +175,7 @@ export default function Tab3Decor() {
   return (
     <div>
       {/* Gallery */}
-      <div className="section-card">
+      <div className="section-card" data-section="decor-upload">
         <div className="section-title">🖼️ Decor Gallery</div>
 
         {/* Filter pills */}
@@ -189,6 +197,7 @@ export default function Tab3Decor() {
               key={item.id}
               item={item}
               isSel={!!selected.find(s=>s.id===item.id)}
+              hasAnySelected={selected.length > 0 && !selected.find(s=>s.id===item.id)}
               onToggle={toggleItem}
             />
           ))}
@@ -243,7 +252,7 @@ export default function Tab3Decor() {
       )}
 
       {/* AI Predictor */}
-      <div className="section-card" style={{ border:'2px solid var(--secondary)' }}>
+      <div className="section-card" data-section="decor-style" style={{ border:'2px solid var(--secondary)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16 }}>
           <div style={{ width:42, height:42, borderRadius:12, background:'linear-gradient(135deg,var(--secondary),#7a5900)',
             display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>🤖</div>
@@ -373,6 +382,31 @@ export default function Tab3Decor() {
           </div>
         )}
       </div>
+
+      {/* Sticky Next button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          position: 'sticky', bottom: '1.5rem',
+          display: 'flex', justifyContent: 'center',
+          zIndex: 50, marginTop: '2rem'
+        }}
+      >
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('weddingNextTab'))}
+          style={{
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: '10px',
+            padding: '14px 40px', fontSize: '15px',
+            fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'inherit',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
+          }}
+        >
+          Next: Food →
+        </button>
+      </motion.div>
     </div>
   )
 }
