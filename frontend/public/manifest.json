@@ -1,0 +1,16 @@
+{
+  "name": "WeddingBudget.AI",
+  "short_name": "WeddingBudget",
+  "description": "AI-powered Indian wedding budget calculator",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAFF",
+  "theme_color": "#023047",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}
