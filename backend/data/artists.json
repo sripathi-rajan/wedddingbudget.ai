@@ -1,0 +1,12 @@
+[
+  {"id": 1, "name": "Local DJ",             "type": "DJ",        "min_fee": 50000,   "max_fee": 150000},
+  {"id": 2, "name": "Professional DJ",      "type": "DJ",        "min_fee": 200000,  "max_fee": 500000},
+  {"id": 3, "name": "Bollywood Singer A",   "type": "Singer",    "min_fee": 800000,  "max_fee": 1200000},
+  {"id": 4, "name": "Bollywood Singer B",   "type": "Singer",    "min_fee": 500000,  "max_fee": 900000},
+  {"id": 5, "name": "Live Band (Local)",    "type": "Band",      "min_fee": 100000,  "max_fee": 300000},
+  {"id": 6, "name": "Live Band (National)", "type": "Band",      "min_fee": 500000,  "max_fee": 1500000},
+  {"id": 7, "name": "Folk Artist",          "type": "Folk",      "min_fee": 30000,   "max_fee": 100000},
+  {"id": 8, "name": "Myra Entertainment",   "type": "Group",     "min_fee": 200000,  "max_fee": 600000},
+  {"id": 9, "name": "Choreographer",        "type": "Dance",     "min_fee": 50000,   "max_fee": 200000},
+  {"id":10, "name": "Anchor / Emcee",       "type": "Anchor",    "min_fee": 30000,   "max_fee": 150000}
+]

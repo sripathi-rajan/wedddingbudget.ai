@@ -1,0 +1,13 @@
+{
+  "Mumbai":    {"ghodi": 25000, "dholi": 8000, "transfer_per_trip": 4500},
+  "Delhi":     {"ghodi": 20000, "dholi": 6000, "transfer_per_trip": 3500},
+  "Bangalore": {"ghodi": 18000, "dholi": 5500, "transfer_per_trip": 3200},
+  "Chennai":   {"ghodi": 15000, "dholi": 5000, "transfer_per_trip": 3000},
+  "Hyderabad": {"ghodi": 16000, "dholi": 5200, "transfer_per_trip": 3100},
+  "Kolkata":   {"ghodi": 14000, "dholi": 4800, "transfer_per_trip": 2800},
+  "Pune":      {"ghodi": 17000, "dholi": 5500, "transfer_per_trip": 3200},
+  "Jaipur":    {"ghodi": 18000, "dholi": 6000, "transfer_per_trip": 3500},
+  "Ahmedabad": {"ghodi": 16000, "dholi": 5000, "transfer_per_trip": 3000},
+  "Surat":     {"ghodi": 15000, "dholi": 4800, "transfer_per_trip": 2900},
+  "Default":   {"ghodi": 15000, "dholi": 5000, "transfer_per_trip": 3500}
+}

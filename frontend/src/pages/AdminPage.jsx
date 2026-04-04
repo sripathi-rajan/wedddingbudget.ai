@@ -1,645 +1,655 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
-const API = 'http://localhost:8000/api'
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'wedding@admin2025'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const C = { navy: '#023047', amber: '#ffb703', blue: '#219ebc', sky: '#8ecae6', orange: '#fb8500', green: '#059669', red: '#DC2626' }
 
-function AdminLogin({ onSuccess }) {
-  const [pw, setPw] = useState('')
-  const [err, setErr] = useState('')
-  const [loading, setLoading] = useState(false)
+// ── JWT helpers ────────────────────────────────────────────────────────────────
+const TOKEN_KEY = 'admin_jwt'
+const TOKEN_TS_KEY = 'admin_jwt_ts'
+const TOKEN_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours
 
-  const attempt = () => {
-    setLoading(true)
-    setTimeout(() => {
-      if (pw === ADMIN_PASSWORD) {
-        sessionStorage.setItem('admin_auth', '1')
-        onSuccess()
-      } else {
-        setErr('Incorrect password. Please try again.')
-        setPw('')
-      }
-      setLoading(false)
-    }, 600)
+function saveToken(token) {
+  sessionStorage.setItem(TOKEN_KEY, token)
+  sessionStorage.setItem(TOKEN_TS_KEY, Date.now().toString())
+}
+
+function getToken() {
+  const token = sessionStorage.getItem(TOKEN_KEY)
+  const ts    = parseInt(sessionStorage.getItem(TOKEN_TS_KEY) || '0', 10)
+  if (!token || Date.now() - ts > TOKEN_TTL_MS) {
+    sessionStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_TS_KEY)
+    return null
   }
+  return token
+}
 
+function clearToken() {
+  sessionStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(TOKEN_TS_KEY)
+}
+
+async function apiFetch(path, opts = {}) {
+  const token = getToken()
+  const res = await fetch(`${API}/admin${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(opts.headers || {}),
+    },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Request failed' }))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+// ── Shared UI ──────────────────────────────────────────────────────────────────
+function Toast({ msg, ok = true }) {
+  if (!msg) return null
   return (
-    <div style={{ minHeight: '100vh', background: '#0F0E17', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#1E1B4B', borderRadius: 20, padding: '40px 48px', width: 380,
-        border: '1px solid rgba(255,183,3,0.3)', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🔐</div>
-          <div style={{ fontFamily: 'EB Garamond, serif', fontSize: 26, fontWeight: 800, color: '#ffb703' }}>
-            Admin Panel
-          </div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>
-            WeddingBudget.ai — Restricted Access
-          </div>
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: 8 }}>
-            Admin Password
-          </label>
-          <input type="password" value={pw} onChange={e => { setPw(e.target.value); setErr('') }}
-            onKeyDown={e => e.key === 'Enter' && attempt()}
-            placeholder="Enter password"
-            style={{ width: '100%', padding: '12px 16px', borderRadius: 10, fontSize: 14,
-              background: 'rgba(255,255,255,0.07)', border: `1.5px solid ${err ? '#f87171' : 'rgba(255,255,255,0.15)'}`,
-              color: 'white', fontFamily: 'Inter, sans-serif', outline: 'none' }} />
-        </div>
-        {err && <div style={{ color: '#f87171', fontSize: 13, marginBottom: 12 }}>⚠️ {err}</div>}
-        <button onClick={attempt} disabled={!pw || loading}
-          style={{ width: '100%', padding: '13px', background: 'linear-gradient(135deg,#ffb703,#fb8500)',
-            color: '#023047', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 15,
-            cursor: pw && !loading ? 'pointer' : 'not-allowed', opacity: pw && !loading ? 1 : 0.6 }}>
-          {loading ? 'Verifying...' : 'Login to Admin Panel'}
-        </button>
-        <div style={{ marginTop: 16, fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>
-          Default password: wedding@admin2025
-        </div>
-      </div>
+    <div style={{
+      position: 'fixed', top: 20, right: 20, zIndex: 9999,
+      background: ok ? C.green : C.red, color: 'white',
+      padding: '10px 20px', borderRadius: 10, fontWeight: 700, fontSize: 14,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.2)', fontFamily: "'DM Sans', sans-serif"
+    }}>{msg}</div>
+  )
+}
+
+function useToast() {
+  const [toast, setToast] = useState(null)
+  const show = (msg, ok = true) => {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 2800)
+  }
+  return [toast, show]
+}
+
+function Card({ children, style = {} }) {
+  return (
+    <div style={{
+      background: 'white', borderRadius: 16, padding: '24px 28px',
+      boxShadow: '0 2px 16px rgba(2,48,71,0.07)', marginBottom: 20, ...style
+    }}>{children}</div>
+  )
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div style={{ fontWeight: 800, fontSize: 16, color: C.navy, marginBottom: 16,
+      borderBottom: `2px solid ${C.amber}`, paddingBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+      {children}
     </div>
   )
 }
 
-const COST_TABLES = {
-  'Wedding Type Base Costs': {
-    description: 'Base package cost per wedding tradition (Low/Mid/High)',
-    data: [
-      { name:'Hindu',     low:800000,  mid:2500000, high:8000000 },
-      { name:'Islam',     low:600000,  mid:1800000, high:5000000 },
-      { name:'Sikh',      low:700000,  mid:2000000, high:6000000 },
-      { name:'Christian', low:500000,  mid:1500000, high:4000000 },
-      { name:'Buddhist',  low:400000,  mid:1200000, high:3500000 },
-      { name:'Jain',      low:600000,  mid:1800000, high:5000000 },
-      { name:'Generic',   low:400000,  mid:1500000, high:4500000 },
-    ]
-  },
-  'Event Costs': {
-    description: 'Per-event costs (Low/Mid/High)',
-    data: [
-      { name:'Engagement',           low:50000,  mid:150000,  high:500000 },
-      { name:'Haldi',                low:20000,  mid:60000,   high:200000 },
-      { name:'Mehendi',              low:30000,  mid:100000,  high:350000 },
-      { name:'Sangeet',              low:100000, mid:350000,  high:1200000 },
-      { name:'Pre Wedding Cocktail', low:80000,  mid:250000,  high:900000 },
-      { name:'Wedding Day Ceremony', low:200000, mid:600000,  high:2000000 },
-      { name:'Reception',            low:150000, mid:500000,  high:1800000 },
-    ]
-  },
-  'Venue Costs/Day': {
-    description: 'Venue rental cost per day (Low/Mid/High)',
-    data: [
-      { name:'Banquet Hall',   low:50000,  mid:150000,  high:500000 },
-      { name:'Wedding Lawn',   low:40000,  mid:120000,  high:400000 },
-      { name:'Hotel 3-5 Star', low:100000, mid:350000,  high:1200000 },
-      { name:'Resort',         low:150000, mid:500000,  high:2000000 },
-      { name:'Heritage Palace',low:300000, mid:1000000, high:5000000 },
-      { name:'Beach Venue',    low:200000, mid:600000,  high:2500000 },
-      { name:'Farmhouse',      low:50000,  mid:150000,  high:500000 },
-      { name:'Temple',         low:10000,  mid:40000,   high:150000 },
-      { name:'Home Intimate',  low:10000,  mid:30000,   high:100000 },
-    ]
-  },
-  'Artist Costs': {
-    description: 'Artist & entertainment rates (Low/High range)',
-    data: [
-      { name:'Local DJ',            low:50000,   high:150000 },
-      { name:'Professional DJ',     low:200000,  high:500000 },
-      { name:'Bollywood Singer A',  low:800000,  high:1200000 },
-      { name:'Bollywood Singer B',  low:500000,  high:900000 },
-      { name:'Live Band (Local)',   low:100000,  high:300000 },
-      { name:'Live Band (National)',low:500000,  high:1500000 },
-      { name:'Folk Artist',         low:30000,   high:100000 },
-      { name:'Myra Entertainment',  low:200000,  high:600000 },
-      { name:'Choreographer',       low:50000,   high:200000 },
-      { name:'Anchor / Emcee',      low:30000,   high:150000 },
-    ]
-  },
-  'Specialty Counter Rates (per head ₹)': {
-    description: 'Per-head cost for specialty food/beverage counters at the wedding — admin editable',
-    data: [
-      { name:'Chaat Counter',    mid:70  },
-      { name:'Mocktail Bar',     mid:90  },
-      { name:'Ice Cream Station',mid:55  },
-      { name:'Tea-Coffee 24hr',  mid:35  },
-      { name:'Paan Counter',     mid:45  },
-      { name:'Fruit Station',    mid:65  },
-    ]
-  },
-  'Mandapam Pricing (₹/day)': {
-    description: 'Admin-set cost per day for mandapam/banquet venues — users cannot override these',
-    data: [
-      { name:'Generic Mandapam (any city)',  mid:200000 },
-      { name:'Premium Banquet Hall',         mid:400000 },
-      { name:'Luxury Convention Centre',     mid:750000 },
-      { name:'Chennai — Narada Gana Sabha',  mid:280000 },
-      { name:'Chennai — Sathyam Convention', mid:550000 },
-      { name:'Mumbai — Taj Lands End',       mid:900000 },
-      { name:'Delhi — Taj Palace',           mid:950000 },
-      { name:'Bengaluru — Leela Palace',     mid:850000 },
-      { name:'Hyderabad — Taj Falaknuma',    mid:1200000 },
-    ]
-  },
+const inputStyle = {
+  padding: '8px 12px', border: `1.5px solid ${C.sky}`, borderRadius: 8,
+  fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: 'none', width: '100%', boxSizing: 'border-box'
 }
 
-const ML_SAMPLES = [
-  { function_type:'Mandap',      style:'Romantic',    complexity:'High',   cost:180000, region:'Pan-India' },
-  { function_type:'Mandap',      style:'Traditional', complexity:'High',   cost:200000, region:'North India' },
-  { function_type:'Mandap',      style:'Luxury',      complexity:'High',   cost:350000, region:'Rajasthan' },
-  { function_type:'Entrance',    style:'Traditional', complexity:'Medium', cost:45000,  region:'South India' },
-  { function_type:'Entrance',    style:'Modern',      complexity:'High',   cost:90000,  region:'Metro' },
-  { function_type:'Table Decor', style:'Minimalist',  complexity:'Low',    cost:35000,  region:'Pan-India' },
-  { function_type:'Table Decor', style:'Romantic',    complexity:'Medium', cost:65000,  region:'Pan-India' },
-  { function_type:'Ceiling',     style:'Modern',      complexity:'High',   cost:120000, region:'Metro' },
-  { function_type:'Backdrop',    style:'Boho',        complexity:'Medium', cost:65000,  region:'Pan-India' },
-  { function_type:'Stage',       style:'Luxury',      complexity:'High',   cost:400000, region:'Metro' },
-  { function_type:'Lighting',    style:'Traditional', complexity:'Low',    cost:22000,  region:'Pan-India' },
-  { function_type:'Pillars',     style:'Luxury',      complexity:'High',   cost:280000, region:'Rajasthan' },
-]
-
-function fmt(n) {
-  if (!n) return '₹0'
-  if (n >= 100000) return `₹${(n/100000).toFixed(1)}L`
-  if (n >= 1000) return `₹${(n/1000).toFixed(0)}K`
-  return `₹${n}`
+function Btn({ children, onClick, color = C.navy, textColor = 'white', small = false, disabled = false }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      padding: small ? '5px 14px' : '9px 20px',
+      borderRadius: 8, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+      background: disabled ? '#ccc' : color, color: textColor,
+      fontWeight: 700, fontSize: small ? 12 : 13, fontFamily: "'DM Sans', sans-serif"
+    }}>{children}</button>
+  )
 }
 
-function AdminPageInner({ onClose }) {
-  const [activeSection, setActiveSection] = useState('dashboard')
-  const [apiStatus, setApiStatus] = useState('checking')
-  const [labelImages, setLabelImages] = useState([])
-  const [labelEdits, setLabelEdits] = useState({})
-  const [labelSaving, setLabelSaving] = useState({})
-  const [labelSaved, setLabelSaved] = useState({})
+// ── Login Page ─────────────────────────────────────────────────────────────────
+function LoginPage({ onLogin }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError]       = useState('')
+  const [loading, setLoading]   = useState(false)
 
-  useEffect(() => {
-    fetch(`${API}/admin/`)
-      .then(r => r.json())
-      .then(() => setApiStatus('online'))
-      .catch(() => setApiStatus('offline'))
-  }, [])
-
-  useEffect(() => {
-    if (activeSection !== 'label-images') return
-    fetch(`${API}/admin/images`)
-      .then(r => r.json())
-      .then(d => {
-        setLabelImages(d.images || [])
-        const edits = {}
-        for (const img of d.images || []) {
-          edits[img.filename] = {
-            category: img.category || 'Mandap',
-            complexity: img.complexity || 'Simple',
-            cost: img.cost != null ? img.cost : '',
-          }
-        }
-        setLabelEdits(edits)
-      })
-      .catch(() => {})
-  }, [activeSection])
-
-  const handleLabelChange = (filename, field, value) => {
-    setLabelEdits(prev => ({ ...prev, [filename]: { ...prev[filename], [field]: value } }))
-  }
-
-  const handleLabelSave = async (filename) => {
-    const edit = labelEdits[filename] || {}
-    setLabelSaving(prev => ({ ...prev, [filename]: true }))
+  const attempt = async () => {
+    if (!username || !password) { setError('Enter username and password'); return }
+    setLoading(true)
+    setError('')
     try {
-      const res = await fetch(`${API}/admin/label`, {
+      const data = await apiFetch('/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, category: edit.category, complexity: edit.complexity, cost: Number(edit.cost) }),
+        body: JSON.stringify({ username, password }),
       })
-      if (res.ok) {
-        setLabelSaved(prev => ({ ...prev, [filename]: true }))
-        setTimeout(() => setLabelSaved(prev => ({ ...prev, [filename]: false })), 2000)
-      }
+      saveToken(data.access_token)
+      onLogin()
+    } catch (e) {
+      setError(e.message || 'Login failed')
     } finally {
-      setLabelSaving(prev => ({ ...prev, [filename]: false }))
+      setLoading(false)
     }
   }
 
-  const sections = [
-    { id:'dashboard', label:'Dashboard', icon:'📊' },
-    { id:'cost-tables', label:'Cost Tables', icon:'💰' },
-    { id:'ml-model', label:'ML Model', icon:'🤖' },
-    { id:'label-images', label:'Label Images', icon:'🏷️' },
-    { id:'settings', label:'Settings', icon:'⚙️' },
-  ]
-
   return (
-    <div style={{ minHeight:'100vh', background:'#0F0E17', color:'white', fontFamily:'Inter,sans-serif' }}>
-      {/* Admin Header */}
-      <div style={{ background:'linear-gradient(90deg,#1E1B4B,#4C1D95)', padding:'16px 28px',
-        display:'flex', alignItems:'center', gap:16,
-        boxShadow:'0 4px 20px rgba(0,0,0,0.5)' }}>
-        <div style={{ fontSize:28 }}>⚙️</div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontFamily:'EB Garamond,serif', fontSize:22, fontWeight:800 }}>
-            weddingbudget.ai — Admin Panel
-          </div>
-          <div style={{ fontSize:12, opacity:0.7, marginTop:2 }}>System configuration & management</div>
+    <div style={{
+      minHeight: '100vh', background: 'linear-gradient(135deg, #0a0e1a 0%, #023047 100%)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: "'DM Sans', sans-serif"
+    }}>
+      <div style={{
+        background: 'white', borderRadius: 20, padding: '44px 48px', width: 380,
+        boxShadow: '0 12px 60px rgba(0,0,0,0.4)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ fontSize: 48, marginBottom: 10 }}>🔐</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: C.navy }}>Admin Panel</div>
+          <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>WeddingBudget.AI — Restricted Access</div>
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:13 }}>
-          <div style={{ width:8, height:8, borderRadius:'50%',
-            background: apiStatus==='online' ? '#4ADE80' : apiStatus==='offline' ? '#F87171' : '#FCD34D' }} />
-          <span style={{ opacity:0.8 }}>Backend: {apiStatus}</span>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 6 }}>Username</label>
+          <input value={username} onChange={e => setUsername(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && attempt()}
+            placeholder="admin" style={inputStyle} />
         </div>
-        <button onClick={onClose}
-          style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)',
-            color:'white', borderRadius:10, padding:'8px 20px', cursor:'pointer',
-            fontWeight:700, fontSize:14 }}>
-          Back to App
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 6 }}>Password</label>
+          <input type="password" value={password} onChange={e => { setPassword(e.target.value); setError('') }}
+            onKeyDown={e => e.key === 'Enter' && attempt()}
+            placeholder="Enter password" style={{ ...inputStyle, borderColor: error ? C.red : C.sky }} />
+        </div>
+
+        {error && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>⚠ {error}</div>}
+
+        <button onClick={attempt} disabled={loading || !username || !password} style={{
+          width: '100%', padding: '12px', borderRadius: 10, border: 'none',
+          background: loading ? '#888' : C.navy, color: 'white',
+          fontWeight: 700, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer',
+          fontFamily: "'DM Sans', sans-serif", marginTop: 4
+        }}>
+          {loading ? 'Verifying…' : 'Login →'}
         </button>
-      </div>
-
-      <div style={{ display:'flex', minHeight:'calc(100vh - 68px)' }}>
-        {/* Sidebar */}
-        <div style={{ width:220, background:'#1A1A2E', borderRight:'1px solid rgba(255,255,255,0.08)',
-          padding:'20px 12px' }}>
-          {sections.map(s => (
-            <button key={s.id} onClick={() => setActiveSection(s.id)}
-              style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
-                padding:'12px 16px', borderRadius:12, border:'none', cursor:'pointer',
-                background: activeSection===s.id ? 'linear-gradient(135deg,#7C3AED,#5B21B6)' : 'transparent',
-                color: activeSection===s.id ? 'white' : 'rgba(255,255,255,0.6)',
-                fontWeight: activeSection===s.id ? 700 : 500,
-                fontSize:14, marginBottom:4, textAlign:'left', transition:'all 0.2s' }}>
-              <span style={{ fontSize:18 }}>{s.icon}</span>
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div style={{ flex:1, padding:'28px', overflowY:'auto' }}>
-
-          {/* DASHBOARD */}
-          {activeSection === 'dashboard' && (
-            <div>
-              <h2 style={{ fontFamily:'EB Garamond,serif', fontSize:26, fontWeight:800, marginBottom:24, color:'#E0D7FF' }}>
-                Dashboard
-              </h2>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:20, marginBottom:32 }}>
-                {[
-                  { label:'Cost Tables', value:'4 categories', icon:'💰', color:'#7C3AED' },
-                  { label:'ML Training Samples', value:`${ML_SAMPLES.length} items`, icon:'🤖', color:'#EC4899' },
-                  { label:'Decor Categories', value:'10 function types', icon:'🎨', color:'#059669' },
-                  { label:'Weekend Surcharge', value:'15%', icon:'📅', color:'#D97706' },
-                  { label:'Contingency Rate', value:'8%', icon:'⚡', color:'#0D9488' },
-                  { label:'Backend Status', value:apiStatus, icon:'🌐', color: apiStatus==='online'?'#059669':'#DC2626' },
-                ].map(card => (
-                  <div key={card.label} style={{ background:'#1E1B4B', borderRadius:16, padding:20,
-                    border:`1px solid ${card.color}40` }}>
-                    <div style={{ fontSize:28, marginBottom:8 }}>{card.icon}</div>
-                    <div style={{ fontSize:22, fontWeight:800, color:card.color, fontFamily:'EB Garamond,serif' }}>
-                      {card.value}
-                    </div>
-                    <div style={{ fontSize:13, opacity:0.7, marginTop:4 }}>{card.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* ML Dataset preview */}
-              <div style={{ background:'#1E1B4B', borderRadius:16, padding:24,
-                border:'1px solid rgba(124,58,237,0.3)' }}>
-                <h3 style={{ fontFamily:'EB Garamond,serif', fontSize:20, fontWeight:700,
-                  color:'#E0D7FF', marginBottom:16 }}>ML Training Dataset Preview</h3>
-                <div style={{ overflowX:'auto' }}>
-                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                    <thead>
-                      <tr style={{ borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
-                        {['Function Type','Style','Complexity','Actual Cost','Region'].map(h => (
-                          <th key={h} style={{ padding:'8px 12px', textAlign:'left',
-                            color:'rgba(255,255,255,0.5)', fontWeight:600, fontSize:12 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ML_SAMPLES.map((s, i) => (
-                        <tr key={i} style={{ borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
-                          <td style={{ padding:'9px 12px', fontWeight:600, color:'#C4B5FD' }}>{s.function_type}</td>
-                          <td style={{ padding:'9px 12px', color:'#F9A8D4' }}>{s.style}</td>
-                          <td style={{ padding:'9px 12px' }}>
-                            <span style={{ padding:'2px 10px', borderRadius:8, fontSize:11, fontWeight:700,
-                              background: s.complexity==='High'?'#BE185D30':s.complexity==='Medium'?'#D9770630':'#05996930',
-                              color: s.complexity==='High'?'#F472B6':s.complexity==='Medium'?'#FCD34D':'#34D399' }}>
-                              {s.complexity}
-                            </span>
-                          </td>
-                          <td style={{ padding:'9px 12px', fontWeight:700, color:'#FDE68A' }}>{fmt(s.cost)}</td>
-                          <td style={{ padding:'9px 12px', color:'rgba(255,255,255,0.5)', fontSize:12 }}>{s.region}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* COST TABLES */}
-          {activeSection === 'cost-tables' && (
-            <div>
-              <h2 style={{ fontFamily:'EB Garamond,serif', fontSize:26, fontWeight:800, marginBottom:24, color:'#E0D7FF' }}>
-                Cost Tables
-              </h2>
-              <div style={{ background:'#1A2744', borderRadius:12, padding:'12px 18px', marginBottom:20,
-                border:'1px solid rgba(13,148,136,0.4)', fontSize:13, color:'#6EE7B7' }}>
-                These tables define all cost estimates used in budget calculations. Changes here will affect new estimates.
-              </div>
-
-              {Object.entries(COST_TABLES).map(([tableName, tableData]) => (
-                <div key={tableName} style={{ background:'#1E1B4B', borderRadius:16, padding:24,
-                  border:'1px solid rgba(124,58,237,0.3)', marginBottom:20 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-                    <h3 style={{ fontFamily:'EB Garamond,serif', fontSize:18, fontWeight:700, color:'#C4B5FD' }}>
-                      {tableName}
-                    </h3>
-                    <button style={{ background:'rgba(124,58,237,0.2)', border:'1px solid rgba(124,58,237,0.5)',
-                      color:'#C4B5FD', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:12, fontWeight:600 }}>
-                      Edit
-                    </button>
-                  </div>
-                  <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>{tableData.description}</div>
-                  <div style={{ overflowX:'auto' }}>
-                    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                      <thead>
-                        <tr style={{ borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
-                          <th style={{ padding:'7px 12px', textAlign:'left', color:'rgba(255,255,255,0.5)', fontSize:12, fontWeight:600 }}>Type</th>
-                          {tableData.data[0].mid !== undefined && (
-                            <>
-                              <th style={{ padding:'7px 12px', textAlign:'right', color:'#4ADE80', fontSize:12, fontWeight:600 }}>Low</th>
-                              <th style={{ padding:'7px 12px', textAlign:'right', color:'#FCD34D', fontSize:12, fontWeight:600 }}>Mid</th>
-                              <th style={{ padding:'7px 12px', textAlign:'right', color:'#F87171', fontSize:12, fontWeight:600 }}>High</th>
-                            </>
-                          )}
-                          {tableData.data[0].mid === undefined && (
-                            <>
-                              <th style={{ padding:'7px 12px', textAlign:'right', color:'#4ADE80', fontSize:12, fontWeight:600 }}>Low</th>
-                              <th style={{ padding:'7px 12px', textAlign:'right', color:'#F87171', fontSize:12, fontWeight:600 }}>High</th>
-                            </>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tableData.data.map((row, i) => (
-                          <tr key={i} style={{ borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
-                            <td style={{ padding:'8px 12px', fontWeight:600, color:'#E0D7FF' }}>{row.name}</td>
-                            <td style={{ padding:'8px 12px', textAlign:'right', color:'#4ADE80' }}>{fmt(row.low)}</td>
-                            {row.mid !== undefined && (
-                              <td style={{ padding:'8px 12px', textAlign:'right', color:'#FCD34D' }}>{fmt(row.mid)}</td>
-                            )}
-                            <td style={{ padding:'8px 12px', textAlign:'right', color:'#F87171' }}>{fmt(row.high)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ML MODEL */}
-          {activeSection === 'ml-model' && (
-            <div>
-              <h2 style={{ fontFamily:'EB Garamond,serif', fontSize:26, fontWeight:800, marginBottom:24, color:'#E0D7FF' }}>
-                ML Model — Decor Intelligence
-              </h2>
-
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:20, marginBottom:24 }}>
-                {[
-                  { label:'Algorithm', value:'RandomForest Regressor', icon:'🌲', color:'#059669' },
-                  { label:'Training Samples', value:'200 (augmented)', icon:'📊', color:'#7C3AED' },
-                  { label:'Feature Dimensions', value:'64 + one-hot', icon:'📐', color:'#EC4899' },
-                  { label:'Embedding Model', value:'MobileNetV2 (simulated)', icon:'🧠', color:'#D97706' },
-                  { label:'Avg. MAE', value:'~₹12,000', icon:'🎯', color:'#0D9488' },
-                  { label:'Confidence Range', value:'80–95%', icon:'✅', color:'#059669' },
-                ].map(m => (
-                  <div key={m.label} style={{ background:'#1E1B4B', borderRadius:14, padding:18,
-                    border:`1px solid ${m.color}40` }}>
-                    <div style={{ fontSize:24, marginBottom:8 }}>{m.icon}</div>
-                    <div style={{ fontSize:17, fontWeight:700, color:m.color }}>{m.value}</div>
-                    <div style={{ fontSize:12, opacity:0.6, marginTop:3 }}>{m.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ background:'#1E1B4B', borderRadius:16, padding:24,
-                border:'1px solid rgba(236,72,153,0.3)', marginBottom:20 }}>
-                <h3 style={{ fontFamily:'EB Garamond,serif', fontSize:18, fontWeight:700,
-                  color:'#F9A8D4', marginBottom:16 }}>Function Type Rates (Mid Estimate)</h3>
-                {[
-                  { type:'Mandap',      low:150000, mid:200000, high:400000, note:'Core ceremony structure' },
-                  { type:'Stage',       low:150000, mid:250000, high:450000, note:'Performance and photo stage' },
-                  { type:'Pillars',     low:100000, mid:200000, high:350000, note:'Hall pillar draping' },
-                  { type:'Ceiling',     low:60000,  mid:100000, high:200000, note:'Overhead installations' },
-                  { type:'Backdrop',    low:40000,  mid:70000,  high:150000, note:'Photo/video backdrops' },
-                  { type:'Entrance',    low:30000,  mid:55000,  high:120000, note:'Entry gate decoration' },
-                  { type:'Photo Booth', low:25000,  mid:60000,  high:120000, note:'Selfie/photo stations' },
-                  { type:'Table Decor', low:20000,  mid:45000,  high:90000,  note:'Centerpieces & florals' },
-                  { type:'Lighting',    low:15000,  mid:30000,  high:70000,  note:'Ambient & effect lighting' },
-                  { type:'Aisle',       low:10000,  mid:22000,  high:50000,  note:'Ceremony aisle setup' },
-                ].map((r, i) => (
-                  <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-                    padding:'10px 0', borderBottom:'1px solid rgba(255,255,255,0.06)', fontSize:13 }}>
-                    <div>
-                      <div style={{ fontWeight:700, color:'#E0D7FF' }}>{r.type}</div>
-                      <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:2 }}>{r.note}</div>
-                    </div>
-                    <div style={{ display:'flex', gap:16, textAlign:'right' }}>
-                      <div><div style={{ fontSize:10, color:'#4ADE80', marginBottom:1 }}>Low</div><div style={{ fontWeight:700, color:'#4ADE80' }}>{fmt(r.low)}</div></div>
-                      <div><div style={{ fontSize:10, color:'#FCD34D', marginBottom:1 }}>Mid</div><div style={{ fontWeight:700, color:'#FCD34D' }}>{fmt(r.mid)}</div></div>
-                      <div><div style={{ fontSize:10, color:'#F87171', marginBottom:1 }}>High</div><div style={{ fontWeight:700, color:'#F87171' }}>{fmt(r.high)}</div></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ background:'#1E1B4B', borderRadius:16, padding:24,
-                border:'1px solid rgba(124,58,237,0.3)' }}>
-                <h3 style={{ fontFamily:'EB Garamond,serif', fontSize:18, fontWeight:700,
-                  color:'#C4B5FD', marginBottom:16 }}>Style Multipliers</h3>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
-                  {[
-                    { style:'Luxury',     mult:'1.45×', color:'#FCD34D' },
-                    { style:'Whimsical',  mult:'1.25×', color:'#C4B5FD' },
-                    { style:'Romantic',   mult:'1.15×', color:'#F9A8D4' },
-                    { style:'Modern',     mult:'1.05×', color:'#93C5FD' },
-                    { style:'Traditional',mult:'0.95×', color:'#6EE7B7' },
-                    { style:'Rustic',     mult:'0.88×', color:'#FCA5A5' },
-                    { style:'Boho',       mult:'0.90×', color:'#86EFAC' },
-                    { style:'Minimalist', mult:'0.72×', color:'#CBD5E1' },
-                    { style:'Playful',    mult:'0.80×', color:'#67E8F9' },
-                  ].map(m => (
-                    <div key={m.style} style={{ background:'rgba(255,255,255,0.05)', borderRadius:10, padding:'12px 14px',
-                      display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                      <span style={{ fontSize:13, fontWeight:600, color:'rgba(255,255,255,0.7)' }}>{m.style}</span>
-                      <span style={{ fontSize:15, fontWeight:800, color:m.color }}>{m.mult}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* LABEL IMAGES */}
-          {activeSection === 'label-images' && (
-            <div style={{ fontFamily: 'DM Sans, sans-serif' }}>
-              <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: '#1a1a1a' }}>
-                Label Images
-              </h2>
-              <p style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>
-                Assign category, complexity and cost to each decor image for ML training.
-              </p>
-              {labelImages.length === 0 ? (
-                <div style={{ background: '#fff', border: '1px solid #EBEBEB', borderRadius: 12,
-                  padding: '40px', textAlign: 'center', color: '#aaa', fontSize: 14 }}>
-                  No images found in <code>decor_dataset/data/images/</code>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
-                  {labelImages.map(img => {
-                    const edit = labelEdits[img.filename] || {}
-                    const saving = labelSaving[img.filename]
-                    const saved = labelSaved[img.filename]
-                    const imgUrl = `${API.replace('/api', '')}/decor_dataset/data/images/${img.filename}`
-                    return (
-                      <div key={img.filename} style={{ background: '#fff', border: '1px solid #EBEBEB',
-                        borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <div style={{ height: 180, background: '#f8f8f8', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                          <img src={imgUrl} alt={img.filename}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={e => { e.target.style.display = 'none' }} />
-                        </div>
-                        <div style={{ padding: '14px 16px' }}>
-                          <div style={{ fontSize: 11, color: '#aaa', marginBottom: 12,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {img.filename}
-                          </div>
-                          <div style={{ marginBottom: 10 }}>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>
-                              Category
-                            </label>
-                            <select value={edit.category || 'Mandap'}
-                              onChange={e => handleLabelChange(img.filename, 'category', e.target.value)}
-                              style={{ width: '100%', padding: '7px 10px', borderRadius: 8,
-                                border: '1px solid #EBEBEB', fontSize: 13, fontFamily: 'DM Sans, sans-serif',
-                                color: '#333', outline: 'none', background: '#fafafa' }}>
-                              {['Mandap','Stage','Entrance','Floral','Reception','Table'].map(c => (
-                                <option key={c} value={c}>{c}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div style={{ marginBottom: 10 }}>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>
-                              Complexity
-                            </label>
-                            <select value={edit.complexity || 'Simple'}
-                              onChange={e => handleLabelChange(img.filename, 'complexity', e.target.value)}
-                              style={{ width: '100%', padding: '7px 10px', borderRadius: 8,
-                                border: '1px solid #EBEBEB', fontSize: 13, fontFamily: 'DM Sans, sans-serif',
-                                color: '#333', outline: 'none', background: '#fafafa' }}>
-                              {['Simple','Medium','Elaborate'].map(c => (
-                                <option key={c} value={c}>{c}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div style={{ marginBottom: 14 }}>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>
-                              Cost (₹)
-                            </label>
-                            <input type="number" min="0" value={edit.cost}
-                              onChange={e => handleLabelChange(img.filename, 'cost', e.target.value)}
-                              placeholder="e.g. 150000"
-                              style={{ width: '100%', padding: '7px 10px', borderRadius: 8,
-                                border: '1px solid #EBEBEB', fontSize: 13, fontFamily: 'DM Sans, sans-serif',
-                                color: '#333', outline: 'none', background: '#fafafa', boxSizing: 'border-box' }} />
-                          </div>
-                          <button onClick={() => handleLabelSave(img.filename)} disabled={saving}
-                            style={{ width: '100%', padding: '9px', borderRadius: 9, border: 'none',
-                              background: saved ? '#e8f5e9' : '#D4537E', color: saved ? '#2e7d32' : '#fff',
-                              fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer',
-                              fontFamily: 'DM Sans, sans-serif', transition: 'background 0.2s',
-                              opacity: saving ? 0.7 : 1 }}>
-                            {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* SETTINGS */}
-          {activeSection === 'settings' && (
-            <div>
-              <h2 style={{ fontFamily:'EB Garamond,serif', fontSize:26, fontWeight:800, marginBottom:24, color:'#E0D7FF' }}>
-                Settings
-              </h2>
-
-              {[
-                { label:'Weekend Surcharge Rate', value:'15%', key:'weekend_surcharge', editable:true },
-                { label:'Contingency Buffer Rate', value:'8%', key:'contingency_rate', editable:true },
-                { label:'Backend API URL', value:'http://localhost:8000', key:'api_url', editable:true },
-                { label:'ML Model Path', value:'backend/decor_model.joblib', key:'model_path', editable:false },
-                { label:'Default Guest Count', value:'200', key:'default_guests', editable:true },
-                { label:'Currency', value:'INR (₹)', key:'currency', editable:false },
-              ].map(s => (
-                <div key={s.key} style={{ background:'#1E1B4B', borderRadius:14, padding:20,
-                  border:'1px solid rgba(255,255,255,0.08)', marginBottom:14,
-                  display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <div>
-                    <div style={{ fontSize:14, fontWeight:600, color:'#E0D7FF' }}>{s.label}</div>
-                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:3 }}>Key: {s.key}</div>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                    <div style={{ fontFamily:'monospace', fontSize:14, color:'#FCD34D', padding:'6px 14px',
-                      background:'rgba(252,211,77,0.1)', borderRadius:8 }}>{s.value}</div>
-                    {s.editable && (
-                      <button style={{ background:'rgba(124,58,237,0.2)', border:'1px solid rgba(124,58,237,0.5)',
-                        color:'#C4B5FD', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12, fontWeight:600 }}>
-                        Edit
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              <div style={{ background:'#1A2744', borderRadius:14, padding:20,
-                border:'1px solid rgba(13,148,136,0.4)', marginTop:24 }}>
-                <div style={{ fontSize:14, fontWeight:700, color:'#6EE7B7', marginBottom:8 }}>
-                  System Information
-                </div>
-                {[
-                  { label:'App Version', value:'2.0.0 (weddingbudget.ai)' },
-                  { label:'Frontend', value:'React + Vite' },
-                  { label:'Backend', value:'FastAPI + Python' },
-                  { label:'ML Stack', value:'scikit-learn RandomForest + MobileNetV2' },
-                  { label:'Optimization', value:'PSO (30 particles × 50 iterations)' },
-                ].map(s => (
-                  <div key={s.label} style={{ display:'flex', justifyContent:'space-between',
-                    padding:'7px 0', borderBottom:'1px solid rgba(255,255,255,0.05)', fontSize:13 }}>
-                    <span style={{ color:'rgba(255,255,255,0.5)' }}>{s.label}</span>
-                    <span style={{ color:'#E0D7FF', fontWeight:600 }}>{s.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   )
 }
 
+// ── Tab: Artists ───────────────────────────────────────────────────────────────
+function ArtistsTab() {
+  const [artists, setArtists] = useState([])
+  const [editing, setEditing] = useState(null)  // {id, name, type, min_fee, max_fee}
+  const [adding,  setAdding]  = useState(false)
+  const [draft,   setDraft]   = useState({ name: '', type: '', min_fee: '', max_fee: '' })
+  const [toast, showToast]    = useToast()
+
+  const load = useCallback(() => apiFetch('/artists').then(setArtists).catch(e => showToast(e.message, false)), [])
+  useEffect(() => { load() }, [load])
+
+  const save = async () => {
+    try {
+      if (editing) {
+        const updated = await apiFetch(`/artists/${editing.id}`, {
+          method: 'PUT', body: JSON.stringify({ ...draft, id: editing.id }),
+        })
+        setArtists(a => a.map(x => x.id === editing.id ? updated : x))
+        setEditing(null)
+      } else {
+        const created = await apiFetch('/artists', { method: 'POST', body: JSON.stringify(draft) })
+        setArtists(a => [...a, created])
+        setAdding(false)
+      }
+      showToast(editing ? 'Artist updated' : 'Artist added')
+      setDraft({ name: '', type: '', min_fee: '', max_fee: '' })
+    } catch (e) { showToast(e.message, false) }
+  }
+
+  const del = async (id) => {
+    if (!confirm('Delete this artist?')) return
+    try {
+      await apiFetch(`/artists/${id}`, { method: 'DELETE' })
+      setArtists(a => a.filter(x => x.id !== id))
+      showToast('Artist deleted')
+    } catch (e) { showToast(e.message, false) }
+  }
+
+  const startEdit = (a) => { setEditing(a); setDraft({ name: a.name, type: a.type, min_fee: a.min_fee, max_fee: a.max_fee }); setAdding(false) }
+
+  const DraftRow = () => (
+    <tr style={{ background: '#fffbea' }}>
+      <td style={{ padding: '8px 10px' }}><input value={draft.name} onChange={e => setDraft(d => ({...d, name: e.target.value}))} style={{...inputStyle, width: 160}} placeholder="Name" /></td>
+      <td style={{ padding: '8px 10px' }}><input value={draft.type} onChange={e => setDraft(d => ({...d, type: e.target.value}))} style={{...inputStyle, width: 100}} placeholder="Type" /></td>
+      <td style={{ padding: '8px 10px' }}><input type="number" value={draft.min_fee} onChange={e => setDraft(d => ({...d, min_fee: e.target.value}))} style={{...inputStyle, width: 110}} placeholder="Min ₹" /></td>
+      <td style={{ padding: '8px 10px' }}><input type="number" value={draft.max_fee} onChange={e => setDraft(d => ({...d, max_fee: e.target.value}))} style={{...inputStyle, width: 110}} placeholder="Max ₹" /></td>
+      <td style={{ padding: '8px 10px', display: 'flex', gap: 6 }}>
+        <Btn small onClick={save} color={C.green}>Save</Btn>
+        <Btn small onClick={() => { setEditing(null); setAdding(false); setDraft({ name: '', type: '', min_fee: '', max_fee: '' }) }} color="#888">Cancel</Btn>
+      </td>
+    </tr>
+  )
+
+  return (
+    <Card>
+      {toast && <Toast {...toast} />}
+      <SectionTitle>🎤 Artist Cost Database</SectionTitle>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: '#f0f7fc' }}>
+              {['Name', 'Type', 'Min Fee (₹)', 'Max Fee (₹)', 'Actions'].map(h => (
+                <th key={h} style={{ padding: '10px 10px', textAlign: 'left', fontWeight: 700, color: C.navy, borderBottom: `2px solid ${C.amber}` }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {artists.map((a, i) => (
+              editing?.id === a.id ? <DraftRow key={a.id} /> :
+              <tr key={a.id} style={{ background: i % 2 === 0 ? 'white' : '#f9fbfd' }}>
+                <td style={{ padding: '10px 10px', fontWeight: 600, color: C.navy }}>{a.name}</td>
+                <td style={{ padding: '10px 10px', color: C.blue }}>{a.type}</td>
+                <td style={{ padding: '10px 10px' }}>₹{Number(a.min_fee).toLocaleString('en-IN')}</td>
+                <td style={{ padding: '10px 10px' }}>₹{Number(a.max_fee).toLocaleString('en-IN')}</td>
+                <td style={{ padding: '8px 10px', display: 'flex', gap: 6 }}>
+                  <Btn small onClick={() => startEdit(a)} color={C.blue}>Edit</Btn>
+                  <Btn small onClick={() => del(a.id)} color={C.red}>Del</Btn>
+                </td>
+              </tr>
+            ))}
+            {adding && !editing && <DraftRow key="new" />}
+          </tbody>
+        </table>
+      </div>
+      {!adding && !editing && (
+        <div style={{ marginTop: 14 }}>
+          <Btn onClick={() => { setAdding(true); setDraft({ name: '', type: '', min_fee: '', max_fee: '' }) }} color={C.amber} textColor={C.navy}>+ Add Artist</Btn>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ── Tab: F&B Rates ─────────────────────────────────────────────────────────────
+function FBRatesTab() {
+  const [rates, setRates]   = useState(null)
+  const [toast, showToast]  = useToast()
+
+  useEffect(() => {
+    apiFetch('/fb-rates').then(setRates).catch(e => showToast(e.message, false))
+  }, [])
+
+  const save = async () => {
+    try {
+      await apiFetch('/fb-rates', { method: 'PUT', body: JSON.stringify(rates) })
+      showToast('F&B rates saved')
+    } catch (e) { showToast(e.message, false) }
+  }
+
+  const update = (category, tier, meal, value) => {
+    setRates(r => ({ ...r, [category]: { ...r[category], [tier]: { ...r[category][tier], [meal]: Number(value) } } }))
+  }
+
+  if (!rates) return <Card><div style={{ color: '#888', fontSize: 13 }}>Loading…</div></Card>
+
+  const meals = ['breakfast', 'lunch', 'dinner', 'snacks']
+  const tiers = ['basic', 'standard', 'premium']
+
+  return (
+    <Card>
+      {toast && <Toast {...toast} />}
+      <SectionTitle>🍽️ F&amp;B Per-Head Rates (₹)</SectionTitle>
+      {['veg', 'non_veg', 'jain'].map(cat => (
+        <div key={cat} style={{ marginBottom: 24 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: C.blue, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{cat.replace('_', '-')}</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#f0f7fc' }}>
+                  <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: C.navy, borderBottom: `2px solid ${C.amber}` }}>Tier</th>
+                  {meals.map(m => (
+                    <th key={m} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: C.navy, borderBottom: `2px solid ${C.amber}`, textTransform: 'capitalize' }}>{m}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tiers.map((tier, i) => (
+                  <tr key={tier} style={{ background: i % 2 === 0 ? 'white' : '#f9fbfd' }}>
+                    <td style={{ padding: '8px 14px', fontWeight: 700, color: C.navy, textTransform: 'capitalize' }}>{tier}</td>
+                    {meals.map(meal => (
+                      <td key={meal} style={{ padding: '6px 14px' }}>
+                        <input type="number" value={rates[cat]?.[tier]?.[meal] ?? ''} style={{ ...inputStyle, width: 90 }}
+                          onChange={e => update(cat, tier, meal, e.target.value)} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      <Btn onClick={save} color={C.green}>Save All F&amp;B Rates</Btn>
+    </Card>
+  )
+}
+
+// ── Tab: Logistics ─────────────────────────────────────────────────────────────
+function LogisticsTab() {
+  const [data, setData]       = useState({})
+  const [editing, setEditing] = useState(null)
+  const [draft, setDraft]     = useState({ city: '', ghodi: '', dholi: '', transfer_per_trip: '' })
+  const [adding, setAdding]   = useState(false)
+  const [toast, showToast]    = useToast()
+
+  useEffect(() => {
+    apiFetch('/logistics').then(setData).catch(e => showToast(e.message, false))
+  }, [])
+
+  const saveCity = async () => {
+    try {
+      if (editing) {
+        await apiFetch(`/logistics/${editing}`, { method: 'PUT', body: JSON.stringify(draft) })
+        setData(d => ({ ...d, [editing]: { ghodi: +draft.ghodi, dholi: +draft.dholi, transfer_per_trip: +draft.transfer_per_trip } }))
+        setEditing(null)
+      } else {
+        await apiFetch('/logistics', { method: 'POST', body: JSON.stringify(draft) })
+        setData(d => ({ ...d, [draft.city]: { ghodi: +draft.ghodi, dholi: +draft.dholi, transfer_per_trip: +draft.transfer_per_trip } }))
+        setAdding(false)
+      }
+      showToast('Logistics saved')
+      setDraft({ city: '', ghodi: '', dholi: '', transfer_per_trip: '' })
+    } catch (e) { showToast(e.message, false) }
+  }
+
+  const startEdit = (city) => { setEditing(city); setDraft({ city, ...data[city] }); setAdding(false) }
+
+  return (
+    <Card>
+      {toast && <Toast {...toast} />}
+      <SectionTitle>🚐 City-wise Logistics Costs</SectionTitle>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: '#f0f7fc' }}>
+              {['City', 'Ghodi (₹)', 'Dholi (₹)', 'Transfer/Trip (₹)', 'Actions'].map(h => (
+                <th key={h} style={{ padding: '10px 10px', textAlign: 'left', fontWeight: 700, color: C.navy, borderBottom: `2px solid ${C.amber}` }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(data).map(([city, vals], i) => (
+              editing === city ? (
+                <tr key={city} style={{ background: '#fffbea' }}>
+                  <td style={{ padding: '8px 10px', fontWeight: 700 }}>{city}</td>
+                  {['ghodi', 'dholi', 'transfer_per_trip'].map(f => (
+                    <td key={f} style={{ padding: '8px 10px' }}>
+                      <input type="number" value={draft[f]} onChange={e => setDraft(d => ({...d, [f]: e.target.value}))} style={{...inputStyle, width: 110}} />
+                    </td>
+                  ))}
+                  <td style={{ padding: '8px 10px', display: 'flex', gap: 6 }}>
+                    <Btn small onClick={saveCity} color={C.green}>Save</Btn>
+                    <Btn small onClick={() => setEditing(null)} color="#888">Cancel</Btn>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={city} style={{ background: i % 2 === 0 ? 'white' : '#f9fbfd' }}>
+                  <td style={{ padding: '10px 10px', fontWeight: 600, color: C.navy }}>{city}</td>
+                  <td style={{ padding: '10px 10px' }}>₹{Number(vals.ghodi).toLocaleString('en-IN')}</td>
+                  <td style={{ padding: '10px 10px' }}>₹{Number(vals.dholi).toLocaleString('en-IN')}</td>
+                  <td style={{ padding: '10px 10px' }}>₹{Number(vals.transfer_per_trip).toLocaleString('en-IN')}</td>
+                  <td style={{ padding: '8px 10px' }}><Btn small onClick={() => startEdit(city)} color={C.blue}>Edit</Btn></td>
+                </tr>
+              )
+            ))}
+            {adding && (
+              <tr style={{ background: '#fffbea' }}>
+                <td style={{ padding: '8px 10px' }}><input value={draft.city} onChange={e => setDraft(d => ({...d, city: e.target.value}))} style={{...inputStyle, width: 110}} placeholder="City name" /></td>
+                {['ghodi', 'dholi', 'transfer_per_trip'].map(f => (
+                  <td key={f} style={{ padding: '8px 10px' }}><input type="number" value={draft[f]} onChange={e => setDraft(d => ({...d, [f]: e.target.value}))} style={{...inputStyle, width: 110}} placeholder="₹" /></td>
+                ))}
+                <td style={{ padding: '8px 10px', display: 'flex', gap: 6 }}>
+                  <Btn small onClick={saveCity} color={C.green}>Save</Btn>
+                  <Btn small onClick={() => setAdding(false)} color="#888">Cancel</Btn>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {!adding && !editing && (
+        <div style={{ marginTop: 14 }}>
+          <Btn onClick={() => { setAdding(true); setDraft({ city: '', ghodi: '', dholi: '', transfer_per_trip: '' }) }} color={C.amber} textColor={C.navy}>+ Add City</Btn>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ── Tab: Decor Labels ──────────────────────────────────────────────────────────
+function DecorLabelsTab() {
+  const [images, setImages] = useState([])
+  const [drafts, setDrafts] = useState({})   // filename → {function_type, style, complexity, seed_cost}
+  const [toast, showToast]  = useToast()
+
+  useEffect(() => {
+    apiFetch('/decor-images').then(r => {
+      setImages(r.images || [])
+      const init = {}
+      r.images?.forEach(img => {
+        init[img.filename] = {
+          function_type: img.function_type || '',
+          style:         img.style || '',
+          complexity:    img.complexity ?? 3,
+          seed_cost:     img.seed_cost ?? '',
+        }
+      })
+      setDrafts(init)
+    }).catch(e => showToast(e.message, false))
+  }, [])
+
+  const saveLabel = async (filename) => {
+    const d = drafts[filename]
+    try {
+      await apiFetch('/decor-images/label', {
+        method: 'POST',
+        body: JSON.stringify({ filename, ...d, complexity: Number(d.complexity), seed_cost: Number(d.seed_cost) }),
+      })
+      showToast(`Saved: ${filename}`)
+    } catch (e) { showToast(e.message, false) }
+  }
+
+  const update = (filename, field, value) => {
+    setDrafts(d => ({ ...d, [filename]: { ...d[filename], [field]: value } }))
+  }
+
+  const FUNCTION_TYPES = ['Mandap', 'Stage', 'Ceiling', 'Entrance', 'Backdrop', 'Aisle', 'Table', 'Photo Booth', 'Lighting', 'Pillars', 'Other']
+  const STYLES = ['Luxury', 'Romantic', 'Traditional', 'Modern', 'Rustic', 'Boho', 'Minimalist', 'Whimsical', 'Playful']
+
+  if (images.length === 0) {
+    return <Card><div style={{ color: '#888', fontSize: 13 }}>No decor images found in backend/decor_dataset/data/images/</div></Card>
+  }
+
+  return (
+    <Card>
+      {toast && <Toast {...toast} />}
+      <SectionTitle>🖼️ Decor Image Labeller ({images.length} images)</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+        {images.map(img => {
+          const d = drafts[img.filename] || {}
+          return (
+            <div key={img.filename} style={{
+              border: `1.5px solid ${C.sky}`, borderRadius: 12, overflow: 'hidden',
+              background: 'white', boxShadow: '0 2px 8px rgba(2,48,71,0.06)'
+            }}>
+              <div style={{ background: '#f0f7fc', padding: '8px 12px', fontSize: 11, color: '#4a7a94', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {img.filename}
+              </div>
+              <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555' }}>Function Type</label>
+                  <select value={d.function_type || ''} onChange={e => update(img.filename, 'function_type', e.target.value)}
+                    style={{ ...inputStyle, marginTop: 3 }}>
+                    <option value="">— select —</option>
+                    {FUNCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555' }}>Style</label>
+                  <select value={d.style || ''} onChange={e => update(img.filename, 'style', e.target.value)}
+                    style={{ ...inputStyle, marginTop: 3 }}>
+                    <option value="">— select —</option>
+                    {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555' }}>Complexity (1–5): <strong>{d.complexity}</strong></label>
+                  <input type="range" min={1} max={5} value={d.complexity || 3}
+                    onChange={e => update(img.filename, 'complexity', e.target.value)}
+                    style={{ width: '100%', marginTop: 4 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555' }}>Seed Cost (₹)</label>
+                  <input type="number" value={d.seed_cost || ''} onChange={e => update(img.filename, 'seed_cost', e.target.value)}
+                    placeholder="e.g. 150000" style={{ ...inputStyle, marginTop: 3 }} />
+                </div>
+                <Btn small onClick={() => saveLabel(img.filename)} color={C.navy}>Save Label</Btn>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
+// ── Tab: Settings ──────────────────────────────────────────────────────────────
+function SettingsTab({ onLogout }) {
+  const [data, setData]    = useState(null)
+  const [toast, showToast] = useToast()
+
+  useEffect(() => {
+    apiFetch('/contingency').then(setData).catch(e => showToast(e.message, false))
+  }, [])
+
+  const save = async () => {
+    try {
+      const updated = await apiFetch('/contingency', {
+        method: 'PUT',
+        body: JSON.stringify({
+          contingency_pct: Number(data.contingency_pct),
+          weekend_surcharge_pct: Number(data.weekend_surcharge_pct),
+        }),
+      })
+      setData(updated)
+      showToast('Settings saved')
+    } catch (e) { showToast(e.message, false) }
+  }
+
+  return (
+    <>
+      {toast && <Toast {...toast} />}
+      <Card>
+        <SectionTitle>⚙ Budget Settings</SectionTitle>
+        {data && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 360 }}>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 600, color: C.navy, display: 'block', marginBottom: 6 }}>
+                Contingency Buffer % (e.g. 0.08 = 8%)
+              </label>
+              <input type="number" step="0.01" min="0" max="1"
+                value={data.contingency_pct}
+                onChange={e => setData(d => ({...d, contingency_pct: e.target.value}))}
+                style={{ ...inputStyle, maxWidth: 200 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 600, color: C.navy, display: 'block', marginBottom: 6 }}>
+                Weekend Surcharge % (e.g. 0.15 = 15%)
+              </label>
+              <input type="number" step="0.01" min="0" max="1"
+                value={data.weekend_surcharge_pct}
+                onChange={e => setData(d => ({...d, weekend_surcharge_pct: e.target.value}))}
+                style={{ ...inputStyle, maxWidth: 200 }} />
+            </div>
+            {data.updated_at && (
+              <div style={{ fontSize: 12, color: '#888' }}>Last updated: {new Date(data.updated_at).toLocaleString('en-IN')}</div>
+            )}
+            <Btn onClick={save} color={C.green}>Save Settings</Btn>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <SectionTitle>🔒 Session</SectionTitle>
+        <div style={{ fontSize: 13, color: '#555', marginBottom: 14 }}>JWT token expires 24 hours after login. Logging out clears the session token.</div>
+        <Btn onClick={onLogout} color={C.red}>Logout</Btn>
+      </Card>
+    </>
+  )
+}
+
+// ── Main AdminPage ─────────────────────────────────────────────────────────────
+const TABS = [
+  { id: 'artists',  label: '🎤 Artists' },
+  { id: 'fb',       label: '🍽️ F&B Rates' },
+  { id: 'logistics',label: '🚐 Logistics' },
+  { id: 'decor',    label: '🖼️ Decor Labels' },
+  { id: 'settings', label: '⚙ Settings' },
+]
+
 export default function AdminPage({ onClose }) {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem('admin_auth') === '1')
-  if (!authed) return <AdminLogin onSuccess={() => setAuthed(true)} />
-  return <AdminPageInner onClose={onClose} />
+  const [authed, setAuthed]     = useState(!!getToken())
+  const [activeTab, setActiveTab] = useState('artists')
+
+  const logout = () => { clearToken(); setAuthed(false) }
+
+  // Auto-logout on token expiry (poll every minute)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!getToken()) setAuthed(false)
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f4f7fb', fontFamily: "'DM Sans', sans-serif" }}>
+      {/* Header */}
+      <div style={{
+        background: C.navy, color: 'white', padding: '0 28px',
+        display: 'flex', alignItems: 'center', gap: 16, height: 56,
+        boxShadow: '0 2px 12px rgba(2,48,71,0.18)'
+      }}>
+        <span style={{ fontSize: 20 }}>🌸</span>
+        <span style={{ fontWeight: 800, fontSize: 16 }}>WeddingBudget.AI</span>
+        <span style={{ opacity: 0.4, fontSize: 18 }}>|</span>
+        <span style={{ fontWeight: 600, fontSize: 14, opacity: 0.85 }}>Admin Panel</span>
+        <div style={{ flex: 1 }} />
+        <button onClick={onClose} style={{
+          background: 'rgba(255,255,255,0.12)', border: 'none', color: 'white',
+          borderRadius: 8, padding: '6px 16px', cursor: 'pointer',
+          fontWeight: 600, fontSize: 13, fontFamily: "'DM Sans', sans-serif"
+        }}>← Back to App</button>
+      </div>
+
+      {/* Tab bar */}
+      <div style={{ background: 'white', borderBottom: '1px solid #EBEBEB', padding: '0 28px', display: 'flex', gap: 2 }}>
+        {TABS.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            padding: '14px 18px', border: 'none', cursor: 'pointer', background: 'transparent',
+            fontWeight: activeTab === tab.id ? 700 : 500,
+            fontSize: 13,
+            color: activeTab === tab.id ? C.navy : '#888',
+            borderBottom: activeTab === tab.id ? `3px solid ${C.amber}` : '3px solid transparent',
+            fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s'
+          }}>{tab.label}</button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 24px' }}>
+        {activeTab === 'artists'   && <ArtistsTab />}
+        {activeTab === 'fb'        && <FBRatesTab />}
+        {activeTab === 'logistics' && <LogisticsTab />}
+        {activeTab === 'decor'     && <DecorLabelsTab />}
+        {activeTab === 'settings'  && <SettingsTab onLogout={logout} />}
+      </div>
+    </div>
+  )
 }

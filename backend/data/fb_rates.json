@@ -1,0 +1,17 @@
+{
+  "veg": {
+    "basic":   {"breakfast": 150, "lunch": 400, "dinner": 500, "snacks": 100},
+    "standard":{"breakfast": 250, "lunch": 650, "dinner": 850, "snacks": 175},
+    "premium": {"breakfast": 400, "lunch": 1000,"dinner": 1400,"snacks": 300}
+  },
+  "non_veg": {
+    "basic":   {"breakfast": 200, "lunch": 500, "dinner": 650, "snacks": 125},
+    "standard":{"breakfast": 300, "lunch": 800, "dinner": 1100,"snacks": 200},
+    "premium": {"breakfast": 500, "lunch": 1200,"dinner": 1700,"snacks": 350}
+  },
+  "jain": {
+    "basic":   {"breakfast": 150, "lunch": 380, "dinner": 480, "snacks": 100},
+    "standard":{"breakfast": 250, "lunch": 600, "dinner": 800, "snacks": 160},
+    "premium": {"breakfast": 400, "lunch": 950, "dinner": 1300,"snacks": 280}
+  }
+}

@@ -1,14 +1,41 @@
-from fastapi import APIRouter, HTTPException
+"""Admin router — JWT-protected cost database management."""
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
-import os, sys, csv
+from typing import Optional, List
+import os, csv, json
+from datetime import datetime
+
+from auth import authenticate_admin, create_access_token, require_admin
 
 router = APIRouter()
 
-IMAGES_DIR = os.path.join(os.path.dirname(__file__), "..", "decor_dataset", "data", "images")
-LABELS_CSV = os.path.join(os.path.dirname(__file__), "..", "decor_dataset", "data", "labels.csv")
+# ── Paths ──────────────────────────────────────────────────────────────────────
+_BASE = os.path.dirname(os.path.dirname(__file__))
+DATA_DIR      = os.path.join(_BASE, "data")
+ARTISTS_FILE  = os.path.join(DATA_DIR, "artists.json")
+FB_FILE       = os.path.join(DATA_DIR, "fb_rates.json")
+LOGISTICS_FILE= os.path.join(DATA_DIR, "logistics.json")
+CONTINGENCY_FILE = os.path.join(DATA_DIR, "contingency.json")
+IMAGES_DIR    = os.path.join(_BASE, "decor_dataset", "data", "images")
+LABELS_CSV    = os.path.join(_BASE, "decor_dataset", "data", "labels.csv")
+
+os.makedirs(DATA_DIR, exist_ok=True)
 
 
+# ── JSON helpers ───────────────────────────────────────────────────────────────
+def _read_json(path: str, default):
+    if not os.path.exists(path):
+        return default
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_json(path: str, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+# ── CSV helpers (decor labels) ─────────────────────────────────────────────────
 def _read_labels() -> dict:
     labels = {}
     if not os.path.exists(LABELS_CSV):
@@ -21,7 +48,7 @@ def _read_labels() -> dict:
 
 def _write_labels(labels: dict):
     os.makedirs(os.path.dirname(LABELS_CSV), exist_ok=True)
-    fieldnames = ["filename", "category", "complexity", "cost"]
+    fieldnames = ["filename", "function_type", "style", "complexity", "seed_cost"]
     with open(LABELS_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -29,151 +56,158 @@ def _write_labels(labels: dict):
             writer.writerow({k: row.get(k, "") for k in fieldnames})
 
 
-class LabelUpdate(BaseModel):
+# ── Pydantic models ────────────────────────────────────────────────────────────
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class Artist(BaseModel):
+    id: Optional[int] = None
+    name: str
+    type: str
+    min_fee: int
+    max_fee: int
+
+
+class FBRates(BaseModel):
+    veg: dict
+    non_veg: dict
+    jain: dict
+
+
+class LogisticsCity(BaseModel):
+    city: str
+    ghodi: int
+    dholi: int
+    transfer_per_trip: int
+
+
+class ContingencySettings(BaseModel):
+    contingency_pct: float
+    weekend_surcharge_pct: float
+
+
+class DecorLabel(BaseModel):
     filename: str
-    category: str
-    complexity: str
-    cost: float
-
-COST_TABLES = {
-    "wedding_type_base": {
-        "Hindu":     {"low": 800000,  "mid": 2500000, "high": 8000000},
-        "Islam":     {"low": 600000,  "mid": 1800000, "high": 5000000},
-        "Sikh":      {"low": 700000,  "mid": 2000000, "high": 6000000},
-        "Christian": {"low": 500000,  "mid": 1500000, "high": 4000000},
-        "Buddhist":  {"low": 400000,  "mid": 1200000, "high": 3500000},
-        "Jain":      {"low": 600000,  "mid": 1800000, "high": 5000000},
-        "Generic":   {"low": 400000,  "mid": 1500000, "high": 4500000},
-    },
-    "event_costs": {
-        "Engagement":              {"low": 50000,  "mid": 150000,  "high": 500000},
-        "Haldi":                   {"low": 20000,  "mid": 60000,   "high": 200000},
-        "Mehendi":                 {"low": 30000,  "mid": 100000,  "high": 350000},
-        "Sangeet":                 {"low": 100000, "mid": 350000,  "high": 1200000},
-        "Pre Wedding Cocktail":    {"low": 80000,  "mid": 250000,  "high": 900000},
-        "Wedding Day Ceremony":    {"low": 200000, "mid": 600000,  "high": 2000000},
-        "Reception":               {"low": 150000, "mid": 500000,  "high": 1800000},
-    },
-    "venue_costs_per_day": {
-        "Banquet Hall":            {"low": 50000,  "mid": 150000,  "high": 500000},
-        "Wedding Lawn":            {"low": 40000,  "mid": 120000,  "high": 400000},
-        "Hotel 3-5 Star":          {"low": 100000, "mid": 350000,  "high": 1200000},
-        "Resort":                  {"low": 150000, "mid": 500000,  "high": 2000000},
-        "Heritage Palace":         {"low": 300000, "mid": 1000000, "high": 5000000},
-        "Beach Venue":             {"low": 200000, "mid": 600000,  "high": 2500000},
-        "Farmhouse":               {"low": 50000,  "mid": 150000,  "high": 500000},
-        "Temple":                  {"low": 10000,  "mid": 40000,   "high": 150000},
-        "Home Intimate":           {"low": 10000,  "mid": 30000,   "high": 100000},
-    },
-    "artist_costs": {
-        "Local DJ":              {"low": 50000,   "high": 150000},
-        "Professional DJ":       {"low": 200000,  "high": 500000},
-        "Bollywood Singer A":    {"low": 800000,  "high": 1200000},
-        "Bollywood Singer B":    {"low": 500000,  "high": 900000},
-        "Live Band (Local)":     {"low": 100000,  "high": 300000},
-        "Live Band (National)":  {"low": 500000,  "high": 1500000},
-        "Folk Artist":           {"low": 30000,   "high": 100000},
-        "Myra Entertainment":    {"low": 200000,  "high": 600000},
-        "Choreographer":         {"low": 50000,   "high": 200000},
-        "Anchor / Emcee":        {"low": 30000,   "high": 150000},
-    },
-    "decor_rates": {
-        "Mandap":      {"low": 150000, "mid": 200000, "high": 400000},
-        "Stage":       {"low": 150000, "mid": 250000, "high": 450000},
-        "Pillars":     {"low": 100000, "mid": 200000, "high": 350000},
-        "Ceiling":     {"low": 60000,  "mid": 100000, "high": 200000},
-        "Backdrop":    {"low": 40000,  "mid": 70000,  "high": 150000},
-        "Entrance":    {"low": 30000,  "mid": 55000,  "high": 120000},
-        "Photo Booth": {"low": 25000,  "mid": 60000,  "high": 120000},
-        "Table Decor": {"low": 20000,  "mid": 45000,  "high": 90000},
-        "Lighting":    {"low": 15000,  "mid": 30000,  "high": 70000},
-        "Aisle":       {"low": 10000,  "mid": 22000,  "high": 50000},
-    },
-    "style_multipliers": {
-        "Luxury":      1.45,
-        "Whimsical":   1.25,
-        "Romantic":    1.15,
-        "Modern":      1.05,
-        "Traditional": 0.95,
-        "Rustic":      0.88,
-        "Boho":        0.90,
-        "Minimalist":  0.72,
-        "Playful":     0.80,
-    },
-    "complexity_multipliers": {
-        "High":   1.40,
-        "Medium": 1.00,
-        "Low":    0.75,
-    },
-    "logistics": {
-        "innova_per_trip":     3500,
-        "guests_per_vehicle":  3,
-        "trips_per_vehicle":   4,
-        "dholi_per_hour":      5000,
-        "sfx_cold_pyro":       15000,
-        "sfx_confetti_cannon": 8000,
-        "sfx_smoke_machine":   5000,
-        "sfx_laser_show":      25000,
-        "weekend_surcharge":   0.15,
-        "contingency_pct":     0.08,
-    }
-}
+    function_type: str
+    style: str
+    complexity: int   # 1–5
+    seed_cost: float
 
 
+# ── Auth endpoint (public) ─────────────────────────────────────────────────────
+@router.post("/login")
+def login(body: LoginRequest):
+    if not authenticate_admin(body.username, body.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_access_token({"sub": body.username})
+    return {"access_token": token, "token_type": "bearer", "expires_in_hours": 24}
+
+
+# ── Unprotected status ─────────────────────────────────────────────────────────
 @router.get("/")
 def get_admin():
-    return {"module": "admin", "status": "ready", "version": "2.0.0"}
+    return {"module": "admin", "status": "ready", "version": "3.0.0"}
 
 
 @router.get("/stats")
 def get_stats():
-    model_exists = os.path.exists("decor_model.joblib")
-    encoder_exists = os.path.exists("decor_encoder.joblib")
     return {
         "app": "weddingbudget.ai",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "backend": "FastAPI",
-        "ml_model_loaded": model_exists,
-        "ml_encoder_loaded": encoder_exists,
-        "cost_table_categories": list(COST_TABLES.keys()),
-        "weekend_surcharge": "15%",
-        "contingency_rate": "8%",
+        "auth": "JWT (24h)",
     }
 
 
-@router.get("/cost-tables")
-def get_cost_tables():
-    return COST_TABLES
+# ── Artists ────────────────────────────────────────────────────────────────────
+@router.get("/artists", dependencies=[Depends(require_admin)])
+def get_artists():
+    return _read_json(ARTISTS_FILE, [])
 
 
-@router.get("/cost-tables/{table_name}")
-def get_cost_table(table_name: str):
-    if table_name not in COST_TABLES:
-        return {"error": f"Table '{table_name}' not found", "available": list(COST_TABLES.keys())}
-    return {table_name: COST_TABLES[table_name]}
+@router.post("/artists", dependencies=[Depends(require_admin)])
+def add_artist(artist: Artist):
+    artists = _read_json(ARTISTS_FILE, [])
+    new_id = max((a["id"] for a in artists), default=0) + 1
+    artist.id = new_id
+    artists.append(artist.dict())
+    _write_json(ARTISTS_FILE, artists)
+    return artist
 
 
-@router.get("/ml/status")
-def get_ml_status():
-    model_path = "decor_model.joblib"
-    encoder_path = "decor_encoder.joblib"
-    embeddings_path = "embeddings.json"
-    return {
-        "model_file": model_path,
-        "model_exists": os.path.exists(model_path),
-        "encoder_exists": os.path.exists(encoder_path),
-        "embeddings_exists": os.path.exists(embeddings_path),
-        "algorithm": "RandomForestRegressor (300 estimators)",
-        "features": "128-dim embedding + one-hot (function_type, style, complexity, region)",
-        "base_samples": 75,
-        "augmented_samples": 400,
-        "mae_estimate": "~₹15,000–20,000 (augmented synthetic data)",
-        "confidence_range": "80-95%",
-    }
+@router.put("/artists/{artist_id}", dependencies=[Depends(require_admin)])
+def update_artist(artist_id: int, artist: Artist):
+    artists = _read_json(ARTISTS_FILE, [])
+    for i, a in enumerate(artists):
+        if a["id"] == artist_id:
+            artists[i] = {**artist.dict(), "id": artist_id}
+            _write_json(ARTISTS_FILE, artists)
+            return artists[i]
+    raise HTTPException(status_code=404, detail="Artist not found")
 
 
-@router.get("/images")
-def list_images():
+@router.delete("/artists/{artist_id}", dependencies=[Depends(require_admin)])
+def delete_artist(artist_id: int):
+    artists = _read_json(ARTISTS_FILE, [])
+    new_list = [a for a in artists if a["id"] != artist_id]
+    if len(new_list) == len(artists):
+        raise HTTPException(status_code=404, detail="Artist not found")
+    _write_json(ARTISTS_FILE, new_list)
+    return {"ok": True}
+
+
+# ── F&B Rates ──────────────────────────────────────────────────────────────────
+@router.get("/fb-rates", dependencies=[Depends(require_admin)])
+def get_fb_rates():
+    return _read_json(FB_FILE, {})
+
+
+@router.put("/fb-rates", dependencies=[Depends(require_admin)])
+def update_fb_rates(rates: FBRates):
+    _write_json(FB_FILE, rates.dict())
+    return rates
+
+
+# ── Logistics ──────────────────────────────────────────────────────────────────
+@router.get("/logistics", dependencies=[Depends(require_admin)])
+def get_logistics():
+    return _read_json(LOGISTICS_FILE, {})
+
+
+@router.put("/logistics/{city}", dependencies=[Depends(require_admin)])
+def update_logistics_city(city: str, data: LogisticsCity):
+    logistics = _read_json(LOGISTICS_FILE, {})
+    logistics[city] = {"ghodi": data.ghodi, "dholi": data.dholi, "transfer_per_trip": data.transfer_per_trip}
+    _write_json(LOGISTICS_FILE, logistics)
+    return logistics[city]
+
+
+@router.post("/logistics", dependencies=[Depends(require_admin)])
+def add_logistics_city(data: LogisticsCity):
+    logistics = _read_json(LOGISTICS_FILE, {})
+    logistics[data.city] = {"ghodi": data.ghodi, "dholi": data.dholi, "transfer_per_trip": data.transfer_per_trip}
+    _write_json(LOGISTICS_FILE, logistics)
+    return {data.city: logistics[data.city]}
+
+
+# ── Contingency ────────────────────────────────────────────────────────────────
+@router.get("/contingency", dependencies=[Depends(require_admin)])
+def get_contingency():
+    return _read_json(CONTINGENCY_FILE, {"contingency_pct": 0.08, "weekend_surcharge_pct": 0.15})
+
+
+@router.put("/contingency", dependencies=[Depends(require_admin)])
+def update_contingency(data: ContingencySettings):
+    payload = {**data.dict(), "updated_at": datetime.utcnow().isoformat() + "Z"}
+    _write_json(CONTINGENCY_FILE, payload)
+    return payload
+
+
+# ── Decor Images ───────────────────────────────────────────────────────────────
+@router.get("/decor-images", dependencies=[Depends(require_admin)])
+def list_decor_images():
     labels = _read_labels()
     images = []
     if os.path.isdir(IMAGES_DIR):
@@ -182,31 +216,23 @@ def list_images():
                 label = labels.get(fname, {})
                 images.append({
                     "filename": fname,
-                    "category": label.get("category", ""),
-                    "complexity": label.get("complexity", ""),
-                    "cost": float(label["cost"]) if label.get("cost") else None,
+                    "function_type": label.get("function_type", ""),
+                    "style":         label.get("style", ""),
+                    "complexity":    int(label["complexity"]) if label.get("complexity") else None,
+                    "seed_cost":     float(label["seed_cost"]) if label.get("seed_cost") else None,
                 })
-    return {"images": images}
+    return {"images": images, "total": len(images)}
 
 
-@router.post("/label")
-def update_label(body: LabelUpdate):
+@router.post("/decor-images/label", dependencies=[Depends(require_admin)])
+def label_decor_image(body: DecorLabel):
     labels = _read_labels()
     labels[body.filename] = {
-        "filename": body.filename,
-        "category": body.category,
-        "complexity": body.complexity,
-        "cost": str(body.cost),
+        "filename":      body.filename,
+        "function_type": body.function_type,
+        "style":         body.style,
+        "complexity":    str(body.complexity),
+        "seed_cost":     str(body.seed_cost),
     }
     _write_labels(labels)
     return {"ok": True, "filename": body.filename}
-
-
-@router.get("/decor/rates")
-def get_decor_rates():
-    return {
-        "function_type_base_rates": COST_TABLES["decor_rates"],
-        "style_multipliers": COST_TABLES["style_multipliers"],
-        "complexity_multipliers": COST_TABLES["complexity_multipliers"],
-        "note": "Final cost = base_rate × style_mult × complexity_mult",
-    }
