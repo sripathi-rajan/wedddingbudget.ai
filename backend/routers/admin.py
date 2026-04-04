@@ -1,38 +1,25 @@
-"""Admin router — JWT-protected cost database management."""
+"""Admin router — JWT-protected cost database management (SQLAlchemy)."""
+import json
+import os
+import csv
+from datetime import datetime
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional, List
-import os, csv, json
-from datetime import datetime
+from sqlalchemy import select, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import authenticate_admin, create_access_token, require_admin
+from database import get_db
+from models import Artist, FBRate, LogisticsCost, AdminSetting, CostVersion, DecorImage
 
 router = APIRouter()
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
+# ── Decor image/label paths (file-based, unchanged) ───────────────────────────
 _BASE = os.path.dirname(os.path.dirname(__file__))
-DATA_DIR      = os.path.join(_BASE, "data")
-ARTISTS_FILE  = os.path.join(DATA_DIR, "artists.json")
-FB_FILE       = os.path.join(DATA_DIR, "fb_rates.json")
-LOGISTICS_FILE= os.path.join(DATA_DIR, "logistics.json")
-CONTINGENCY_FILE = os.path.join(DATA_DIR, "contingency.json")
-IMAGES_DIR    = os.path.join(_BASE, "decor_dataset", "data", "images")
-LABELS_CSV    = os.path.join(_BASE, "decor_dataset", "data", "labels.csv")
-
-os.makedirs(DATA_DIR, exist_ok=True)
-
-
-# ── JSON helpers ───────────────────────────────────────────────────────────────
-def _read_json(path: str, default):
-    if not os.path.exists(path):
-        return default
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _write_json(path: str, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+IMAGES_DIR = os.path.join(_BASE, "decor_dataset", "data", "images")
+LABELS_CSV  = os.path.join(_BASE, "decor_dataset", "data", "labels.csv")
 
 
 # ── CSV helpers (decor labels) ─────────────────────────────────────────────────
@@ -62,12 +49,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class Artist(BaseModel):
-    id: Optional[int] = None
+class ArtistIn(BaseModel):
     name: str
     type: str
     min_fee: int
     max_fee: int
+    city: Optional[str] = None
 
 
 class FBRates(BaseModel):
@@ -116,93 +103,142 @@ def get_stats():
     return {
         "app": "weddingbudget.ai",
         "version": "3.0.0",
-        "backend": "FastAPI",
+        "backend": "FastAPI + SQLAlchemy",
         "auth": "JWT (24h)",
     }
 
 
 # ── Artists ────────────────────────────────────────────────────────────────────
 @router.get("/artists", dependencies=[Depends(require_admin)])
-def get_artists():
-    return _read_json(ARTISTS_FILE, [])
+async def get_artists(db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(Artist).order_by(Artist.id))).scalars().all()
+    return [{"id": r.id, "name": r.name, "type": r.type,
+             "min_fee": r.min_fee, "max_fee": r.max_fee, "city": r.city} for r in rows]
 
 
 @router.post("/artists", dependencies=[Depends(require_admin)])
-def add_artist(artist: Artist):
-    artists = _read_json(ARTISTS_FILE, [])
-    new_id = max((a["id"] for a in artists), default=0) + 1
-    artist.id = new_id
-    artists.append(artist.dict())
-    _write_json(ARTISTS_FILE, artists)
-    return artist
+async def add_artist(artist: ArtistIn, db: AsyncSession = Depends(get_db)):
+    row = Artist(**artist.model_dump())
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "name": row.name, "type": row.type,
+            "min_fee": row.min_fee, "max_fee": row.max_fee, "city": row.city}
 
 
 @router.put("/artists/{artist_id}", dependencies=[Depends(require_admin)])
-def update_artist(artist_id: int, artist: Artist):
-    artists = _read_json(ARTISTS_FILE, [])
-    for i, a in enumerate(artists):
-        if a["id"] == artist_id:
-            artists[i] = {**artist.dict(), "id": artist_id}
-            _write_json(ARTISTS_FILE, artists)
-            return artists[i]
-    raise HTTPException(status_code=404, detail="Artist not found")
+async def update_artist(artist_id: int, artist: ArtistIn, db: AsyncSession = Depends(get_db)):
+    row = await db.get(Artist, artist_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Artist not found")
+    # version snapshot
+    db.add(CostVersion(
+        table_name="artists", record_id=artist_id,
+        old_value=json.dumps({"name": row.name, "type": row.type,
+                               "min_fee": row.min_fee, "max_fee": row.max_fee}),
+        new_value=json.dumps(artist.model_dump()),
+    ))
+    for k, v in artist.model_dump().items():
+        setattr(row, k, v)
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "name": row.name, "type": row.type,
+            "min_fee": row.min_fee, "max_fee": row.max_fee, "city": row.city}
 
 
 @router.delete("/artists/{artist_id}", dependencies=[Depends(require_admin)])
-def delete_artist(artist_id: int):
-    artists = _read_json(ARTISTS_FILE, [])
-    new_list = [a for a in artists if a["id"] != artist_id]
-    if len(new_list) == len(artists):
+async def delete_artist(artist_id: int, db: AsyncSession = Depends(get_db)):
+    row = await db.get(Artist, artist_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Artist not found")
-    _write_json(ARTISTS_FILE, new_list)
+    await db.delete(row)
+    await db.commit()
     return {"ok": True}
 
 
 # ── F&B Rates ──────────────────────────────────────────────────────────────────
 @router.get("/fb-rates", dependencies=[Depends(require_admin)])
-def get_fb_rates():
-    return _read_json(FB_FILE, {})
+async def get_fb_rates(db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(FBRate))).scalars().all()
+    # Reconstruct nested dict: {meal_type: {tier: {occasion: cost}}}
+    result: dict = {}
+    for r in rows:
+        result.setdefault(r.meal_type, {}).setdefault(r.tier, {})[r.occasion] = r.per_head_cost
+    return result
 
 
 @router.put("/fb-rates", dependencies=[Depends(require_admin)])
-def update_fb_rates(rates: FBRates):
-    _write_json(FB_FILE, rates.dict())
+async def update_fb_rates(rates: FBRates, db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(FBRate))
+    for meal_type, tiers in rates.model_dump().items():
+        for tier, occasions in tiers.items():
+            for occasion, cost in occasions.items():
+                db.add(FBRate(meal_type=meal_type, tier=tier, occasion=occasion, per_head_cost=cost))
+    await db.commit()
     return rates
 
 
 # ── Logistics ──────────────────────────────────────────────────────────────────
 @router.get("/logistics", dependencies=[Depends(require_admin)])
-def get_logistics():
-    return _read_json(LOGISTICS_FILE, {})
+async def get_logistics(db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(LogisticsCost))).scalars().all()
+    result: dict = {}
+    for r in rows:
+        result.setdefault(r.city, {})[r.service_type] = r.unit_cost
+    return result
 
 
 @router.put("/logistics/{city}", dependencies=[Depends(require_admin)])
-def update_logistics_city(city: str, data: LogisticsCity):
-    logistics = _read_json(LOGISTICS_FILE, {})
-    logistics[city] = {"ghodi": data.ghodi, "dholi": data.dholi, "transfer_per_trip": data.transfer_per_trip}
-    _write_json(LOGISTICS_FILE, logistics)
-    return logistics[city]
+async def update_logistics_city(city: str, data: LogisticsCity, db: AsyncSession = Depends(get_db)):
+    for svc, cost in [("ghodi", data.ghodi), ("dholi", data.dholi),
+                      ("transfer_per_trip", data.transfer_per_trip)]:
+        result = await db.execute(
+            select(LogisticsCost).where(LogisticsCost.city == city, LogisticsCost.service_type == svc)
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.unit_cost = cost
+        else:
+            db.add(LogisticsCost(city=city, service_type=svc, unit_cost=cost, unit="per_event"))
+    await db.commit()
+    return {"ghodi": data.ghodi, "dholi": data.dholi, "transfer_per_trip": data.transfer_per_trip}
 
 
 @router.post("/logistics", dependencies=[Depends(require_admin)])
-def add_logistics_city(data: LogisticsCity):
-    logistics = _read_json(LOGISTICS_FILE, {})
-    logistics[data.city] = {"ghodi": data.ghodi, "dholi": data.dholi, "transfer_per_trip": data.transfer_per_trip}
-    _write_json(LOGISTICS_FILE, logistics)
-    return {data.city: logistics[data.city]}
+async def add_logistics_city(data: LogisticsCity, db: AsyncSession = Depends(get_db)):
+    for svc, cost in [("ghodi", data.ghodi), ("dholi", data.dholi),
+                      ("transfer_per_trip", data.transfer_per_trip)]:
+        db.add(LogisticsCost(city=data.city, service_type=svc, unit_cost=cost, unit="per_event"))
+    await db.commit()
+    return {data.city: {"ghodi": data.ghodi, "dholi": data.dholi,
+                        "transfer_per_trip": data.transfer_per_trip}}
 
 
-# ── Contingency ────────────────────────────────────────────────────────────────
+# ── Contingency (stored in admin_settings) ─────────────────────────────────────
 @router.get("/contingency", dependencies=[Depends(require_admin)])
-def get_contingency():
-    return _read_json(CONTINGENCY_FILE, {"contingency_pct": 0.08, "weekend_surcharge_pct": 0.15})
+async def get_contingency(db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(AdminSetting).where(AdminSetting.key.in_(["contingency_pct", "weekend_surcharge_pct"]))
+    )).scalars().all()
+    data = {r.key: float(r.value) for r in rows}
+    return {
+        "contingency_pct": data.get("contingency_pct", 0.08),
+        "weekend_surcharge_pct": data.get("weekend_surcharge_pct", 0.15),
+    }
 
 
 @router.put("/contingency", dependencies=[Depends(require_admin)])
-def update_contingency(data: ContingencySettings):
-    payload = {**data.dict(), "updated_at": datetime.utcnow().isoformat() + "Z"}
-    _write_json(CONTINGENCY_FILE, payload)
-    return payload
+async def update_contingency(data: ContingencySettings, db: AsyncSession = Depends(get_db)):
+    for key, value in [("contingency_pct", data.contingency_pct),
+                       ("weekend_surcharge_pct", data.weekend_surcharge_pct)]:
+        result = await db.execute(select(AdminSetting).where(AdminSetting.key == key))
+        row = result.scalar_one_or_none()
+        if row:
+            row.value = str(value)
+        else:
+            db.add(AdminSetting(key=key, value=str(value)))
+    await db.commit()
+    return {**data.model_dump(), "updated_at": datetime.utcnow().isoformat() + "Z"}
 
 
 # ── Decor Images ───────────────────────────────────────────────────────────────

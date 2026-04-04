@@ -11,3 +11,7 @@ httpx==0.25.2
 icrawler==0.6.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+aiosqlite==0.19.0
+alembic==1.13.0

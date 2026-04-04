@@ -1,53 +1,46 @@
-import sqlite3
+"""SQLAlchemy async database engine.
+
+Uses PostgreSQL when DATABASE_URL is set (production on Render),
+falls back to SQLite for local development.
+"""
 import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import DeclarativeBase
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'weddingbudgetAI.db')
+# ── Engine setup ───────────────────────────────────────────────────────────────
+_DATABASE_URL = os.environ.get("DATABASE_URL")
 
-def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+if _DATABASE_URL:
+    # Render sets DATABASE_URL as postgres://...; SQLAlchemy needs postgresql+asyncpg://
+    if _DATABASE_URL.startswith("postgres://"):
+        _DATABASE_URL = _DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif _DATABASE_URL.startswith("postgresql://") and "+asyncpg" not in _DATABASE_URL:
+        _DATABASE_URL = _DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    engine = create_async_engine(_DATABASE_URL, pool_pre_ping=True)
+else:
+    _SQLITE_PATH = os.path.join(os.path.dirname(__file__), "data", "wedding.db")
+    os.makedirs(os.path.dirname(_SQLITE_PATH), exist_ok=True)
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{_SQLITE_PATH}",
+        connect_args={"check_same_thread": False},
+    )
 
-def create_all():
-    conn = get_connection()
-    cur = conn.cursor()
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-    cur.executescript("""
-        CREATE TABLE IF NOT EXISTS decor_images (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            filename        TEXT NOT NULL,
-            image_path      TEXT NOT NULL,
-            function_type   TEXT,
-            style           TEXT,
-            complexity      TEXT,
-            base_cost       INTEGER,
-            is_labelled     INTEGER DEFAULT 0,
-            embedding_path  TEXT,
-            predicted_cost  INTEGER,
-            predicted_low   INTEGER,
-            predicted_high  INTEGER,
-            created_at      TEXT DEFAULT (datetime('now'))
-        );
 
-        CREATE TABLE IF NOT EXISTS cost_items (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            category    TEXT NOT NULL,
-            name        TEXT NOT NULL,
-            cost_low    INTEGER,
-            cost_high   INTEGER,
-            unit        TEXT
-        );
+# ── Base class ─────────────────────────────────────────────────────────────────
+class Base(DeclarativeBase):
+    pass
 
-        CREATE TABLE IF NOT EXISTS model_versions (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            version     TEXT UNIQUE,
-            mae         REAL,
-            n_samples   INTEGER,
-            model_path  TEXT,
-            is_active   INTEGER DEFAULT 0,
-            created_at  TEXT DEFAULT (datetime('now'))
-        );
-    """)
 
-    conn.commit()
-    conn.close()
+# ── FastAPI dependency ─────────────────────────────────────────────────────────
+async def get_db() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
+async def create_all():
+    """Create all tables (run on startup)."""
+    from models import Base as _Base  # noqa: F401 — registers all models
+    async with engine.begin() as conn:
+        await conn.run_sync(_Base.metadata.create_all)

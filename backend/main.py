@@ -1,9 +1,21 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import wedding_config, budget, decor, food, artists, logistics, sundries, admin
 import uvicorn, os
 
-app = FastAPI(title="weddingbudget.AI - Wedding Planner API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create tables and seed data on startup
+    from database import create_all as _create_all
+    from seed_data import seed as _seed
+    await _create_all()
+    await _seed()
+    yield
+
+
+app = FastAPI(title="weddingbudget.AI - Wedding Planner API", version="1.0.0", lifespan=lifespan)
 
 # Allow any origin — Vercel frontend calls this Render backend
 app.add_middleware(
