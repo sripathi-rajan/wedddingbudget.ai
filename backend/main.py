@@ -8,10 +8,36 @@ import uvicorn, os
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables and seed data on startup
-    from database import create_all as _create_all
+    from database import create_all as _create_all, AsyncSessionLocal
     from seed_data import seed as _seed
     await _create_all()
     await _seed()
+
+    import logging
+
+    # Load Decor ML model (non-fatal if not trained yet)
+    try:
+        from ml.decor_model import get_predictor
+        p = get_predictor()
+        if p.model_mid is not None:
+            logging.info(f"Decor ML model loaded ({p.n_samples} samples)")
+        else:
+            logging.info("Decor ML using rule-based fallback")
+    except Exception as exc:
+        logging.warning(f"Decor ML init skipped: {exc}")
+
+    # Load RL Budget Agent
+    try:
+        from ml.rl_agent import get_rl_agent
+        agent = get_rl_agent()
+        async with AsyncSessionLocal() as db:
+            await agent.load_state(db)
+        total_rl = sum(agent.training_counts.values())
+        cats_rl  = sum(1 for c in agent.training_counts.values() if c > 0)
+        logging.info(f"RL Agent loaded ({total_rl} training samples across {cats_rl} categories)")
+    except Exception as exc:
+        logging.warning(f"RL Agent init skipped: {exc}")
+
     yield
 
 
@@ -41,7 +67,17 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    rl_info = {}
+    try:
+        from ml.rl_agent import get_rl_agent
+        agent = get_rl_agent()
+        rl_info = {
+            "rl_agent_loaded":  True,
+            "rl_total_samples": sum(agent.training_counts.values()),
+        }
+    except Exception:
+        rl_info = {"rl_agent_loaded": False, "rl_total_samples": 0}
+    return {"status": "ok", **rl_info}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

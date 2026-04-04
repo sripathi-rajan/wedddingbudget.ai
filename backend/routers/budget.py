@@ -1,15 +1,25 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
+from typing import Optional
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from services.budget_engine import calculate_full_budget, run_pso_optimizer
 from models.cost_tables import ARTIST_COSTS, SPECIALTY_COUNTER_COSTS
+from database import get_db
+from ml.rl_agent import get_rl_agent, BUDGET_CATEGORIES
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
 class ConfigPayload(BaseModel):
     data: dict
+
+class LogActualPayload(BaseModel):
+    session_id: str
+    category: str
+    estimated: float
+    actual: float
 
 @router.post("/calculate")
 def calculate_budget(payload: ConfigPayload):
@@ -72,6 +82,80 @@ def get_artists():
 @router.get("/specialty-counters")
 def get_counters():
     return {"counters": SPECIALTY_COUNTER_COSTS}
+
+@router.post("/log-actual")
+async def log_actual_cost(payload: LogActualPayload, db: AsyncSession = Depends(get_db)):
+    """Log an actual spend to train the RL agent."""
+    if payload.category not in BUDGET_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Unknown category. Must be one of: {BUDGET_CATEGORIES}")
+    if payload.actual <= 0 or payload.estimated <= 0:
+        raise HTTPException(status_code=400, detail="actual and estimated must be > 0")
+
+    # Insert into budget_tracker table
+    try:
+        from models import BudgetTracker
+        from sqlalchemy import insert
+        await db.execute(
+            insert(BudgetTracker).values(
+                session_id = payload.session_id,
+                category   = payload.category,
+                estimated  = payload.estimated,
+                actual     = payload.actual,
+                difference = payload.actual - payload.estimated,
+            )
+        )
+        await db.commit()
+    except Exception:
+        pass  # non-fatal
+
+    agent  = get_rl_agent()
+    result = await agent.update(payload.category, payload.estimated, payload.actual, db)
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    accuracy_improvement = result.get("accuracy_delta", 0.0)
+    sign = "+" if accuracy_improvement >= 0 else ""
+    message = (
+        f"Model updated! Accuracy changed by {sign}{accuracy_improvement:.1f}%"
+        if accuracy_improvement != 0
+        else "Model updated with new training sample"
+    )
+
+    return {
+        "success":              True,
+        "new_multiplier":       result["new_multiplier"],
+        "accuracy_improvement": accuracy_improvement,
+        "total_samples":        result["total_samples"],
+        "message":              message,
+    }
+
+
+@router.get("/rl-stats")
+async def get_rl_stats(db: AsyncSession = Depends(get_db)):
+    """Return per-category accuracy stats + overall stats."""
+    agent = get_rl_agent()
+    stats = agent.get_stats()
+    return stats
+
+
+@router.get("/rl-multipliers")
+async def get_rl_multipliers(db: AsyncSession = Depends(get_db)):
+    """Admin view — return all current multipliers with training counts."""
+    agent = get_rl_agent()
+    mults  = agent.get_multipliers()
+    counts = agent.training_counts
+    return {
+        "multipliers": {
+            cat: {
+                "multiplier":     round(mults.get(cat, 1.0), 4),
+                "training_count": counts.get(cat, 0),
+                "rl_adjusted":    abs(mults.get(cat, 1.0) - 1.0) > 0.05,
+            }
+            for cat in BUDGET_CATEGORIES
+        }
+    }
+
 
 @router.post("/export-pdf")
 def export_pdf(payload: ConfigPayload):

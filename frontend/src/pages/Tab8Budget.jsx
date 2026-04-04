@@ -593,6 +593,58 @@ export default function Tab8Budget() {
           <ConfidenceBar score={budget.confidence_score||0.72} />
         </div>
 
+        {/* ── RL Stats Card ── */}
+        <div className="section-card" style={{
+          background: 'linear-gradient(135deg,#EEF2FF,#F0FDF4)',
+          border: '1.5px solid #818CF8'
+        }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+            <span style={{ fontSize:22 }}>🧠</span>
+            <span style={{ fontWeight:800, fontSize:15, color:'#3730A3' }}>Learning Budget AI</span>
+            {budget.rl_active && (
+              <span style={{ fontSize:11, background:'#4F46E5', color:'#fff',
+                padding:'2px 8px', borderRadius:20, fontWeight:700 }}>ACTIVE</span>
+            )}
+          </div>
+          {rlStats && rlStats.total_training_samples > 0 ? (
+            <div>
+              <div style={{ fontSize:13, color:'#374151', marginBottom:10 }}>
+                Trained on <b style={{ color:'#4F46E5' }}>{rlStats.total_training_samples} real bookings</b>
+                {rlStats.overall_accuracy != null && (
+                  <> · Avg accuracy: <b style={{ color:'#059669' }}>{rlStats.overall_accuracy}%</ b></>
+                )}
+              </div>
+              {rlStats.per_category && (
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  {Object.entries(rlStats.per_category)
+                    .filter(([,v]) => v.training_count > 0)
+                    .map(([cat, v]) => (
+                      <div key={cat} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <div style={{ width:120, fontSize:11, color:'#374151', flexShrink:0,
+                          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cat}</div>
+                        <div style={{ flex:1, height:6, background:'#E5E7EB', borderRadius:3, overflow:'hidden' }}>
+                          <div style={{ height:'100%', width:`${v.avg_accuracy ?? 0}%`,
+                            background: v.trend === 'improving' ? '#059669' : v.trend === 'degrading' ? '#DC2626' : '#4F46E5',
+                            borderRadius:3, transition:'width 0.5s ease' }} />
+                        </div>
+                        <div style={{ fontSize:11, fontWeight:700, color:'#374151', width:36, textAlign:'right' }}>
+                          {v.avg_accuracy != null ? `${v.avg_accuracy}%` : '—'}
+                        </div>
+                        <div style={{ fontSize:10, color:'#9CA3AF', width:20 }}>
+                          {v.trend === 'improving' ? '↑' : v.trend === 'degrading' ? '↓' : '→'}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize:13, color:'#6B7280' }}>
+              Log actual costs below to train the AI. Each booking improves future predictions.
+            </div>
+          )}
+        </div>
+
         {/* ── Total Summary Cards ── */}
         {/* Main "Most Likely" total — large count-up display */}
         <div className="section-card" style={{
@@ -682,9 +734,11 @@ export default function Tab8Budget() {
               </thead>
               <tbody>
                 {Object.entries(budget.items||{}).map(([name, vals], ri) => {
-                  const pct     = budget.total.mid > 0 ? (vals.mid/budget.total.mid*100).toFixed(1) : '0'
-                  const isOpen  = expanded.has(name)
-                  const hasSubs = (vals.sub_items||[]).length > 0
+                  const pct       = budget.total.mid > 0 ? (vals.mid/budget.total.mid*100).toFixed(1) : '0'
+                  const isOpen    = expanded.has(name)
+                  const hasSubs   = (vals.sub_items||[]).length > 0
+                  const isLogged  = loggedCats.has(name)
+                  const isLogOpen = logActualOpen[name]
                   return (<>
                     <tr key={name} style={{ background: ri%2===0?'white':'var(--ivory)',
                       cursor: hasSubs?'pointer':'default' }}
@@ -697,6 +751,13 @@ export default function Tab8Budget() {
                           {hasSubs && <span style={{ fontSize:10, color:'var(--muted)' }}>
                             {isOpen ? ' ▲' : ' ▼'}
                           </span>}
+                          {vals.rl_adjusted && (
+                            <span title={`RL-adjusted ×${vals.rl_multiplier}`} style={{
+                              fontSize:10, background:'#4F46E5', color:'#fff',
+                              padding:'1px 6px', borderRadius:10, fontWeight:700, cursor:'help' }}>
+                              🧠 RL ×{vals.rl_multiplier}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding:'10px 10px', color:'var(--muted)', fontSize:11 }}>{vals.note}</td>
@@ -706,6 +767,46 @@ export default function Tab8Budget() {
                       <td style={{ padding:'10px 10px', textAlign:'right', fontWeight:700,
                         color: parseFloat(pct)>25?'#DC2626':parseFloat(pct)>15?'#D97706':'var(--muted)' }}>
                         {pct}%
+                      </td>
+                    </tr>
+                    {/* Log Actual row */}
+                    <tr key={`${name}-log`} style={{ background: ri%2===0?'#F8FAFF':'#F0F4FF' }}>
+                      <td colSpan={6} style={{ padding:'4px 14px 6px 36px' }}
+                        onClick={e => e.stopPropagation()}>
+                        {isLogged ? (
+                          <span style={{ fontSize:11, color:'#059669', fontWeight:700 }}>✓ Logged</span>
+                        ) : isLogOpen ? (
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <span style={{ fontSize:11, color:'#374151', fontWeight:600 }}>Actual spent (₹):</span>
+                            <input type="number" min="1"
+                              placeholder="Enter actual amount"
+                              value={logActualVal[name] || ''}
+                              onChange={e => setLogActualVal(p => ({ ...p, [name]: e.target.value }))}
+                              style={{ padding:'4px 8px', borderRadius:6, border:'1px solid #818CF8',
+                                fontSize:12, width:160 }} />
+                            <button
+                              disabled={loggingCat === name}
+                              onClick={() => handleLogActual(name, vals.mid)}
+                              style={{ padding:'4px 12px', borderRadius:6, border:'none',
+                                background:'#4F46E5', color:'#fff', fontWeight:700, fontSize:11,
+                                cursor:'pointer' }}>
+                              {loggingCat === name ? 'Saving...' : 'Submit'}
+                            </button>
+                            <button onClick={() => setLogActualOpen(p => ({ ...p, [name]: false }))}
+                              style={{ padding:'4px 8px', borderRadius:6, border:'1px solid #E5E7EB',
+                                background:'white', fontSize:11, cursor:'pointer', color:'#6B7280' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={e => { e.stopPropagation(); setLogActualOpen(p => ({ ...p, [name]: true })) }}
+                            style={{ padding:'3px 10px', borderRadius:6, border:'1px solid #818CF8',
+                              background:'white', color:'#4F46E5', fontWeight:600, fontSize:11,
+                              cursor:'pointer' }}>
+                            + Log Actual Cost
+                          </button>
+                        )}
                       </td>
                     </tr>
                     {isOpen && (vals.sub_items||[]).map((sub,si) => (
@@ -1001,6 +1102,32 @@ export default function Tab8Budget() {
               <span>Iterations: <b>{optimResult.iterations}</b></span>
             </div>
           </>)}
+        </div>
+
+        {/* ── RL Explanation Card ── */}
+        <div className="section-card" style={{
+          borderLeft: '4px solid #4F46E5', background: '#FAFAFA'
+        }}>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:14 }}>
+            <span style={{ fontSize:28, lineHeight:1 }}>🧠</span>
+            <div>
+              <div style={{ fontWeight:800, fontSize:15, color:'#1E1B4B', marginBottom:6 }}>
+                Self-Learning Budget AI
+              </div>
+              <div style={{ fontSize:13, color:'#374151', lineHeight:1.6, marginBottom:8 }}>
+                Every time you log what you actually spent, WeddingBudget.AI learns.
+                Over time, estimates become more accurate for your city and wedding style.
+              </div>
+              <div style={{ fontSize:12, color:'#6B7280' }}>
+                Current model: <b style={{ color:'#4F46E5' }}>
+                  {rlStats ? rlStats.total_training_samples : 0} total bookings logged
+                </b>
+                {rlStats?.overall_accuracy != null && (
+                  <> · Overall accuracy: <b style={{ color:'#059669' }}>{rlStats.overall_accuracy}%</b></>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ── Export ── */}

@@ -173,6 +173,37 @@ def calculate_full_budget(config: dict) -> dict:
         "note": "Admin-set 8% buffer"
     }
 
+    # ─── RL Multiplier Adjustment ─────────────────────────
+    rl_active   = False
+    rl_samples  = 0
+    try:
+        from ml.rl_agent import get_rl_agent
+        agent = get_rl_agent()
+        rl_samples = sum(agent.training_counts.values())
+        if rl_samples > 0:
+            for cat, vals in items.items():
+                mult = agent.multipliers.get(cat, 1.0)
+                if abs(mult - 1.0) > 0.01:  # only adjust if meaningfully different
+                    items[cat] = {
+                        "low":          vals["low"]  * mult,
+                        "mid":          vals["mid"]  * mult,
+                        "high":         vals["high"] * mult,
+                        "note":         vals.get("note", ""),
+                        "sub_items":    vals.get("sub_items", []),
+                        "rl_adjusted":  True,
+                        "rl_multiplier": round(mult, 4),
+                    }
+                    rl_active = True
+                else:
+                    items[cat]["rl_adjusted"]  = False
+                    items[cat]["rl_multiplier"] = round(mult, 4)
+        else:
+            for cat in items:
+                items[cat]["rl_adjusted"]  = False
+                items[cat]["rl_multiplier"] = 1.0
+    except Exception:
+        pass  # RL not yet initialised — degrade gracefully
+
     # ─── Totals ───────────────────────────────────────────
     total_low  = sum(v["low"]  for v in items.values())
     total_mid  = sum(v["mid"]  for v in items.values())
@@ -188,9 +219,11 @@ def calculate_full_budget(config: dict) -> dict:
             "high": round(total_high),
         },
         "confidence_score": confidence,
-        "wedding_type": wedding_type,
-        "total_guests": total_guests,
-        "events": events,
+        "wedding_type":     wedding_type,
+        "total_guests":     total_guests,
+        "events":           events,
+        "rl_active":        rl_active,
+        "rl_samples":       rl_samples,
     }
 
 def _calculate_confidence(config: dict) -> float:
