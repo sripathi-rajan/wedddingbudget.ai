@@ -88,10 +88,11 @@ def health():
     decor_info = {}
     try:
         from ml.decor_model import get_predictor
-        p = get_predictor()
+        predictor = get_predictor()
+        predictor._try_load()  # force reload from disk
         decor_info = {
-            "decor_model_loaded":  p.model_mid is not None,
-            "decor_model_samples": p.n_samples,
+            "decor_model_loaded":  predictor.model_mid is not None,
+            "decor_model_samples": predictor.n_samples or 0,
         }
     except Exception:
         decor_info = {"decor_model_loaded": False, "decor_model_samples": 0}
