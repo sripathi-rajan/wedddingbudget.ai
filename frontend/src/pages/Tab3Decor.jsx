@@ -232,12 +232,6 @@ function DecorLibrarySection() {
   return (
     <div className="section-card" style={{ marginTop:24 }}>
       <div className="section-title">🖼️ Decor Inspiration Library</div>
-      {apiError && (
-        <div style={{ marginBottom:12, padding:'10px 14px', background:'#FEF3C7', borderRadius:10,
-          fontSize:12, color:'#92400E', border:'1px solid #FDE68A' }}>
-          ⚠️ Could not reach server — showing placeholder estimates
-        </div>
-      )}
 
       {/* Filter bar */}
       <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:16, alignItems:'center' }}>
