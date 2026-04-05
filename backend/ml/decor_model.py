@@ -1,6 +1,9 @@
 """Decor cost prediction model: ML (RandomForest) or rule-based fallback."""
 import os
+import warnings
 import numpy as np
+
+warnings.filterwarnings('ignore')
 
 _mobilenet = None
 
@@ -46,8 +49,16 @@ class DecorCostPredictor:
                 self.function_types = data["function_types"]
                 self.styles = data["styles"]
                 self.n_samples = data["n_samples"]
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Failed to load decor model, deleting pkl: %s", e)
+                self.model_mid = None
+                self.model_low = None
+                self.model_high = None
+                try:
+                    os.remove(MODEL_PATH)
+                except OSError:
+                    pass
 
     async def train(self, db_session) -> dict:
         """Train on all labelled DecorImages; save model to disk.
@@ -106,6 +117,9 @@ class DecorCostPredictor:
         self.styles = styles
         self.n_samples = len(images)
 
+        if os.path.exists(MODEL_PATH):
+            os.remove(MODEL_PATH)
+
         joblib.dump(
             {
                 "model_mid": model_mid,
@@ -116,6 +130,7 @@ class DecorCostPredictor:
                 "n_samples": len(images),
             },
             MODEL_PATH,
+            protocol=4,
         )
 
         return {"method": "ml", "samples": len(images), "accuracy": round(score, 3)}
