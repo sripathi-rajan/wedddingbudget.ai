@@ -2,6 +2,16 @@
 import os
 import numpy as np
 
+_mobilenet = None
+
+
+def _get_mobilenet():
+    global _mobilenet
+    if _mobilenet is None:
+        from tensorflow.keras.applications import MobileNetV2
+        _mobilenet = MobileNetV2(weights='imagenet')
+    return _mobilenet
+
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "decor_model.pkl")
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "decor_dataset", "data", "images")
 
@@ -132,45 +142,37 @@ class DecorCostPredictor:
             pass
         return True, ""
 
-    def _validate_image_strict(self, image_path: str) -> tuple[bool, str]:
-        """Strict pixel-level validation. Returns (is_valid, reason)."""
+    def _validate_image_strict(self, img):
+        DECOR = ["altar", "arch", "candle", "flower", "bouquet",
+                 "chandelier", "curtain", "lantern", "wreath",
+                 "vase", "garden", "ballroom", "tent", "stage"]
+        REJECT = ["screen", "monitor", "laptop", "keyboard",
+                  "person", "face", "book", "phone", "street"]
         try:
-            from PIL import Image
-
-            img = Image.open(image_path).convert("RGB")
-            img_small = img.resize((100, 100))
-            pixels = np.array(img_small, dtype=np.float32)  # (100,100,3)
-
-            r, g, b = pixels[:, :, 0], pixels[:, :, 1], pixels[:, :, 2]
-
-            # 1. Skin-tone check: R>150, G>100, B>80, R>G, R>B
-            skin_mask = (r > 150) & (g > 100) & (b > 80) & (r > g) & (r > b)
-            skin_tone_ratio = float(skin_mask.sum()) / skin_mask.size
-            if skin_tone_ratio > 0.4:
-                return False, "skin-tone"
-
-            # 2. Complexity check: std of all pixel values
-            complexity_score = float(pixels.std())
-            if complexity_score < 8:
-                return False, "plain"
-
-            # 3. Unique dominant colors (quantize to 8 colors)
-            img_q = img_small.quantize(colors=8)
-            unique_colors = len(set(img_q.getdata()))
-            if unique_colors < 3:
-                return False, "low-colors"
-
+            from tensorflow.keras.applications.mobilenet_v2 import preprocess_input, decode_predictions
+            arr = preprocess_input(
+                np.array(img.resize((224, 224)).convert('RGB'))[np.newaxis]
+            )
+            top = decode_predictions(_get_mobilenet().predict(arr, verbose=0), top=5)[0]
+            labels = [l.lower() for _, l, _ in top]
+            scores = [float(s) for _, _, s in top]
+            is_decor = any(k in l for k in DECOR for l in labels)
+            is_reject = any(k in l for k in REJECT for l in labels)
+            if is_reject and not is_decor:
+                return False, 0
+            return True, min(round(scores[0] * 100 + 50, 1), 95)
         except Exception:
-            pass
-        return True, ""
+            return True, 50
 
     def predict(self, image_path: str, function_type=None, style=None, complexity=None) -> dict:
         """Return cost prediction dict.
 
         Uses ML model when trained, otherwise falls back to rule-based ranges.
         """
-        valid, reason = self._validate_image_strict(image_path)
-        if not valid:
+        from PIL import Image
+        img = Image.open(image_path)
+        is_valid, confidence = self._validate_image_strict(img)
+        if not is_valid:
             return {
                 "predicted_low": 0,
                 "predicted_mid": 0,
