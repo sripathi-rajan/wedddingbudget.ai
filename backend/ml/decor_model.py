@@ -317,11 +317,21 @@ class DecorCostPredictor:
             low  = int(self.model_low.predict(x)[0])
             high = int(self.model_high.predict(x)[0])
 
+            from numpy import array as np_array
+            all_preds = np_array([est.predict(x)[0] for est in self.model_mid.estimators_.ravel()])
+            pred_std  = all_preds.std()
+            pred_mean = all_preds.mean()
+            if pred_mean != 0:
+                conf = 1.0 - (pred_std / pred_mean)
+            else:
+                conf = 0.50
+            confidence = round(max(0.50, min(0.95, conf)), 2)
+
             return {
                 "predicted_low":  low,
                 "predicted_mid":  mid,
                 "predicted_high": high,
-                "confidence":     self._prediction_confidence(low, mid, high),
+                "confidence":     confidence,
                 "method":         "ml",
                 "cv_score":       self.cv_score,
             }
