@@ -99,7 +99,8 @@ async def get_library(
         items.append({
             "id": img.id,
             "filename": img.filename,
-            "url": img.url,
+            "url": img.url or (f"/decor-images/{img.filename}" if img.filename else None),
+            "image_url": img.url or (f"/decor-images/{img.filename}" if img.filename else None),
             "function_type": img.function_type,
             "style": img.style,
             "complexity": img.complexity,

@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from routers import wedding_config, budget, decor, food, artists, logistics, sundries, admin
 import uvicorn, os
+
+DECOR_IMAGES_DIR = os.path.join(os.path.dirname(__file__), "decor_dataset", "data", "images")
 
 
 @asynccontextmanager
@@ -12,6 +15,9 @@ async def lifespan(app: FastAPI):
     from seed_data import seed as _seed
     await _create_all()
     await _seed()
+
+    from ml.import_images import import_images as _import_images
+    await _import_images()
 
     import logging
 
@@ -60,6 +66,21 @@ app.include_router(artists.router,        prefix="/api/artists",   tags=["Artist
 app.include_router(logistics.router,      prefix="/api/logistics", tags=["Logistics"])
 app.include_router(sundries.router,       prefix="/api/sundries",  tags=["Sundries"])
 app.include_router(admin.router,          prefix="/api/admin",     tags=["Admin"])
+
+@app.get("/decor-images/{filename:path}")
+def serve_decor_image(filename: str):
+    # filename may be "subfolder/image.jpg" or just "image.jpg"
+    # Search all subfolders if no subfolder prefix matches directly
+    candidate = os.path.join(DECOR_IMAGES_DIR, filename)
+    if os.path.isfile(candidate):
+        return FileResponse(candidate)
+    # fallback: search every subfolder
+    for subfolder in os.listdir(DECOR_IMAGES_DIR):
+        path = os.path.join(DECOR_IMAGES_DIR, subfolder, filename)
+        if os.path.isfile(path):
+            return FileResponse(path)
+    raise HTTPException(status_code=404, detail="Image not found")
+
 
 @app.get("/")
 def root():
