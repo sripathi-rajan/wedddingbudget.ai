@@ -17,14 +17,25 @@ async def lifespan(app: FastAPI):
     from ml.import_images import import_images as _import_images
     await _import_images()
 
-    # Auto-label images if fewer than 50 labels exist
-    try:
-        from ml.auto_label import maybe_auto_label
-        await maybe_auto_label()
-    except Exception as exc:
-        pass  # non-fatal
-
     import logging
+
+    # Auto-label with MobileNetV2+KMeans if < 200 labels, then retrain model
+    try:
+        from ml.auto_label import maybe_auto_label, _read_labels
+        if len(_read_labels()) < 200:
+            newly_labelled = await maybe_auto_label()
+            if newly_labelled > 0:
+                from ml.decor_model import get_predictor
+                _p = get_predictor()
+                _retrain = await _p.train()
+                logging.info(
+                    "Auto-labelled %d images, model retrained (%s samples, accuracy=%s)",
+                    newly_labelled,
+                    _retrain.get("samples"),
+                    _retrain.get("accuracy"),
+                )
+    except Exception as exc:
+        logging.warning("Auto-label/retrain skipped: %s", exc)
 
     # Load RL Budget Agent
     try:

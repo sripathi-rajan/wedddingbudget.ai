@@ -1,4 +1,4 @@
-"""Decor cost prediction model: GradientBoosting + StandardScaler, or rule-based fallback."""
+"""Decor cost prediction model: GradientBoosting + MobileNetV2/PCA embeddings + StandardScaler."""
 import csv
 import os
 import warnings
@@ -6,20 +6,33 @@ import numpy as np
 
 warnings.filterwarnings('ignore')
 
-_mobilenet = None
+_mobilenet_classifier = None
+_mobilenet_embedder   = None
 
 
-def _get_mobilenet():
-    global _mobilenet
-    if _mobilenet is None:
+def _get_mobilenet_classifier():
+    """Full MobileNetV2 (with top) for decor/reject classification."""
+    global _mobilenet_classifier
+    if _mobilenet_classifier is None:
         from tensorflow.keras.applications import MobileNetV2
-        _mobilenet = MobileNetV2(weights='imagenet')
-    return _mobilenet
+        _mobilenet_classifier = MobileNetV2(weights='imagenet')
+    return _mobilenet_classifier
 
 
-MODEL_PATH  = os.path.join(os.path.dirname(__file__), "decor_model.pkl")
-IMAGES_DIR  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "decor_dataset", "data", "images")
-LABELS_CSV  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "decor_dataset", "data", "labels.csv")
+def _get_mobilenet_embedder():
+    """MobileNetV2 without top, pooling='avg' — outputs 1280-dim embedding."""
+    global _mobilenet_embedder
+    if _mobilenet_embedder is None:
+        from tensorflow.keras.applications import MobileNetV2
+        _mobilenet_embedder = MobileNetV2(weights='imagenet', include_top=False,
+                                          pooling='avg', input_shape=(224, 224, 3))
+    return _mobilenet_embedder
+
+
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "decor_model.pkl")
+PCA_PATH   = os.path.join(os.path.dirname(__file__), "decor_pca.pkl")
+IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "decor_dataset", "data", "images")
+LABELS_CSV = os.path.join(os.path.dirname(os.path.dirname(__file__)), "decor_dataset", "data", "labels.csv")
 
 # Rule-based cost ranges (INR) by complexity 1-5
 RULE_RANGES = {
@@ -42,12 +55,25 @@ def _read_labels() -> dict:
     return labels
 
 
+def _extract_embedding(image_path: str) -> np.ndarray:
+    """Extract 1280-dim MobileNetV2 global_average_pooling embedding."""
+    try:
+        from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+        from PIL import Image
+        img = Image.open(image_path).convert("RGB").resize((224, 224))
+        arr = preprocess_input(np.array(img, dtype=np.float32)[np.newaxis])
+        return _get_mobilenet_embedder().predict(arr, verbose=0)[0]
+    except Exception:
+        return np.zeros(1280, dtype=np.float32)
+
+
 class DecorCostPredictor:
     def __init__(self):
         self.model_mid  = None
         self.model_low  = None
         self.model_high = None
         self.scaler: object = None
+        self.pca: object    = None
         self.function_types: list = []
         self.styles: list = []
         self.n_samples: int = 0
@@ -76,14 +102,22 @@ class DecorCostPredictor:
                 except OSError:
                     pass
 
+        if os.path.exists(PCA_PATH):
+            try:
+                import joblib
+                self.pca = joblib.load(PCA_PATH)
+            except Exception:
+                self.pca = None
+
     async def train(self, db_session=None) -> dict:
-        """Train on all labelled images from labels.csv.
+        """Train GradientBoostingRegressor on MobileNetV2/PCA + pixel features.
 
         Returns a dict with keys: method, samples, accuracy, cv_score.
         Falls back to rule-based if < 5 labelled images.
         """
         import joblib
         from ml.decor_features import extract_features
+        from sklearn.decomposition import PCA
         from sklearn.ensemble import GradientBoostingRegressor
         from sklearn.model_selection import train_test_split, cross_val_score
         from sklearn.preprocessing import StandardScaler
@@ -96,21 +130,37 @@ class DecorCostPredictor:
         function_types = sorted({row["function_type"] for row in labels.values() if row.get("function_type")})
         styles         = sorted({row["style"]         for row in labels.values() if row.get("style")})
 
-        X_list, y_list = [], []
+        # Collect pixel features, embeddings, targets
+        pixel_list, embed_list, y_list, meta_list = [], [], [], []
         for filename, row in labels.items():
             img_path = os.path.join(IMAGES_DIR, filename)
             if not os.path.exists(img_path):
                 continue
-            feats  = extract_features(img_path)
+            pixel_feats = extract_features(img_path)  # 19-dim
+            embedding   = _extract_embedding(img_path)  # 1280-dim
             ft_vec = [1.0 if row.get("function_type") == ft else 0.0 for ft in function_types]
             st_vec = [1.0 if row.get("style") == s else 0.0 for s in styles]
             comp   = (int(row.get("complexity") or 3)) / 5.0
-            X_list.append(np.concatenate([feats, ft_vec, st_vec, [comp]]))
+            pixel_list.append(pixel_feats)
+            embed_list.append(embedding)
             y_list.append(float(row.get("seed_cost") or 0))
+            meta_list.append(np.array(ft_vec + st_vec + [comp]))
 
-        if len(X_list) < 5:
-            return {"method": "rule-based", "samples": len(X_list), "accuracy": None, "cv_score": None}
+        if len(pixel_list) < 5:
+            return {"method": "rule-based", "samples": len(pixel_list), "accuracy": None, "cv_score": None}
 
+        embed_arr = np.array(embed_list, dtype=np.float32)
+
+        # Fit PCA(50) on embeddings
+        n_components = min(50, embed_arr.shape[0] - 1, embed_arr.shape[1])
+        pca = PCA(n_components=n_components, random_state=42)
+        embed_reduced = pca.fit_transform(embed_arr)  # (N, 50)
+
+        # Concatenate: pixel(19) + pca(50) + meta(ft+style+comp)
+        X_list = [
+            np.concatenate([pf, er, m])
+            for pf, er, m in zip(pixel_list, embed_reduced, meta_list)
+        ]
         X = np.array(X_list)
         y = np.array(y_list)
 
@@ -134,8 +184,7 @@ class DecorCostPredictor:
 
         test_score = float(model_mid.score(X_test, y_test))
 
-        # Cross-validation on full scaled dataset
-        cv_scores  = cross_val_score(
+        cv_scores = cross_val_score(
             GradientBoostingRegressor(**gb_params), X_scaled, y,
             cv=min(5, len(X_list)), scoring="r2"
         )
@@ -145,6 +194,7 @@ class DecorCostPredictor:
         self.model_low      = model_low
         self.model_high     = model_high
         self.scaler         = scaler
+        self.pca            = pca
         self.function_types = function_types
         self.styles         = styles
         self.n_samples      = len(X_list)
@@ -168,6 +218,8 @@ class DecorCostPredictor:
             protocol=4,
         )
 
+        joblib.dump(pca, PCA_PATH, protocol=4)
+
         return {
             "method":   "ml",
             "samples":  len(X_list),
@@ -180,7 +232,6 @@ class DecorCostPredictor:
         try:
             from ml.decor_features import extract_features
             feats = extract_features(image_path)
-            # feats indices: 9=brightness, 10=complexity_score, 11=color_variance, 12=warm_ratio
             brightness       = feats[9]
             complexity_score = feats[10]
             color_variance   = feats[11]
@@ -207,7 +258,7 @@ class DecorCostPredictor:
             arr = preprocess_input(
                 np.array(img.resize((224, 224)).convert('RGB'))[np.newaxis]
             )
-            top    = decode_predictions(_get_mobilenet().predict(arr, verbose=0), top=5)[0]
+            top    = decode_predictions(_get_mobilenet_classifier().predict(arr, verbose=0), top=5)[0]
             labels = [l.lower() for _, l, _ in top]
             scores = [float(s) for _, _, s in top]
             is_decor  = any(k in l for k in DECOR for l in labels)
@@ -218,12 +269,13 @@ class DecorCostPredictor:
         except Exception:
             return True, 50
 
-    def _prediction_confidence(self) -> float:
-        """Confidence based on sample size and cross-validation score."""
-        base = 0.55 + min(self.n_samples / 300.0, 0.30)
-        if self.cv_score is not None and self.cv_score > 0:
-            base = base * 0.5 + self.cv_score * 0.5
-        return round(min(base, 0.95), 2)
+    def _prediction_confidence(self, low: int, mid: int, high: int) -> float:
+        """Dynamic confidence: 1 - (prediction_std / prediction_mean), clamped to [0.5, 0.99]."""
+        if mid <= 0:
+            return 0.5
+        std_approx = (high - low) / 2.0
+        conf = 1.0 - (std_approx / mid)
+        return round(max(0.5, min(0.99, conf)), 2)
 
     def predict(self, image_path: str, function_type=None, style=None, complexity=None) -> dict:
         """Return cost prediction dict.
@@ -246,11 +298,18 @@ class DecorCostPredictor:
         if self.model_mid is not None:
             from ml.decor_features import extract_features
 
-            feats  = extract_features(image_path)
+            pixel_feats = extract_features(image_path)  # 19-dim
+            embedding   = _extract_embedding(image_path)  # 1280-dim
+
+            if self.pca is not None:
+                embed_reduced = self.pca.transform(embedding[np.newaxis])[0]  # 50-dim
+            else:
+                embed_reduced = embedding[:50]
+
             ft_vec = [1.0 if function_type == ft else 0.0 for ft in self.function_types]
             st_vec = [1.0 if style == s else 0.0 for s in self.styles]
             comp   = (int(complexity) if complexity is not None else 3) / 5.0
-            x_raw  = np.concatenate([feats, ft_vec, st_vec, [comp]]).reshape(1, -1)
+            x_raw  = np.concatenate([pixel_feats, embed_reduced, ft_vec, st_vec, [comp]]).reshape(1, -1)
 
             x = self.scaler.transform(x_raw) if self.scaler is not None else x_raw
 
@@ -262,7 +321,7 @@ class DecorCostPredictor:
                 "predicted_low":  low,
                 "predicted_mid":  mid,
                 "predicted_high": high,
-                "confidence":     self._prediction_confidence(),
+                "confidence":     self._prediction_confidence(low, mid, high),
                 "method":         "ml",
                 "cv_score":       self.cv_score,
             }
