@@ -97,6 +97,10 @@ pip install greenlet --force-reinstall
 python -m uvicorn main:app --reload --port 8000
 ```
 
+cd backend
+.venv\Scripts\Activate.ps1
+python -m uvicorn main:app --reload --port 8000
+
 **Terminal 2 — Frontend**
 ```bash
 cd frontend

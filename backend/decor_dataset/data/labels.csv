@@ -1,0 +1,300 @@
+filename,function_type,style,complexity,seed_cost
+entrance/000001.jpg,entrance,Luxury,5,187500
+entrance/000002.jpg,entrance,Traditional,5,187500
+entrance/000003.jpg,entrance,Luxury,5,187500
+entrance/000004.jpg,entrance,Traditional,5,187500
+entrance/000005.jpg,entrance,Luxury,5,187500
+entrance/000006.jpg,entrance,Luxury,5,187500
+entrance/000007.jpg,entrance,Luxury,5,187500
+entrance/000008.jpg,entrance,Luxury,5,187500
+entrance/000009.jpg,entrance,Luxury,5,187500
+entrance/000010.jpg,entrance,Luxury,5,187500
+entrance/000011.jpg,entrance,Traditional,5,187500
+entrance/000012.jpg,entrance,Luxury,5,187500
+entrance/000013.jpg,entrance,Traditional,5,187500
+entrance/000014.jpg,entrance,Traditional,5,187500
+entrance/000015.jpg,entrance,Luxury,5,187500
+entrance/000016.jpg,entrance,Luxury,5,187500
+entrance/000017.jpg,entrance,Luxury,5,187500
+entrance/000018.jpg,entrance,Luxury,5,187500
+entrance/000019.jpg,entrance,Luxury,5,187500
+entrance/000020.jpg,entrance,Luxury,5,187500
+entrance/000021.jpg,entrance,Luxury,5,187500
+entrance/000022.jpg,entrance,Luxury,5,187500
+entrance/000023.jpg,entrance,Luxury,5,187500
+entrance/000024.jpg,entrance,Traditional,5,187500
+entrance/000025.jpg,entrance,Traditional,5,187500
+entrance/000026.jpg,entrance,Traditional,5,187500
+entrance/000027.jpg,entrance,Luxury,5,187500
+entrance/000028.jpg,entrance,Luxury,5,187500
+entrance/000029.jpg,entrance,Traditional,5,187500
+entrance/000030.jpg,entrance,Luxury,5,187500
+entrance/000031.jpg,entrance,Traditional,5,187500
+entrance/000032.jpg,entrance,Luxury,5,187500
+entrance/000033.jpg,entrance,Luxury,5,187500
+entrance/000034.jpg,entrance,Luxury,5,187500
+entrance/000035.jpg,entrance,Traditional,5,187500
+entrance/000036.jpg,entrance,Luxury,5,187500
+entrance/000037.jpg,entrance,Luxury,5,187500
+entrance/000038.jpg,entrance,Luxury,5,187500
+entrance/000039.jpg,entrance,Traditional,5,187500
+entrance/000040.jpg,entrance,Luxury,5,187500
+entrance/000041.jpg,entrance,Traditional,5,187500
+entrance/000042.jpg,entrance,Luxury,5,187500
+entrance/000043.jpg,entrance,Traditional,5,187500
+entrance/000044.jpg,entrance,Luxury,5,187500
+entrance/000045.jpg,entrance,Luxury,5,187500
+entrance/000046.jpg,entrance,Luxury,5,187500
+entrance/000047.jpg,entrance,Luxury,5,187500
+entrance/000048.jpg,entrance,Traditional,5,187500
+entrance/000049.jpg,entrance,Luxury,5,187500
+entrance/000050.jpg,entrance,Traditional,5,187500
+entrance/1d301970ce931517c8b8473b1b728a27.jpg,entrance,Luxury,5,187500
+entrance/download (1).jpg,entrance,Traditional,5,187500
+entrance/download (2).jpg,entrance,Traditional,5,187500
+entrance/download (3).jpg,entrance,Luxury,5,187500
+entrance/download (4).jpg,entrance,Luxury,5,187500
+entrance/download (5).jpg,entrance,Luxury,5,187500
+entrance/download (6).jpg,entrance,Traditional,5,187500
+entrance/download (7).jpg,entrance,Traditional,5,187500
+entrance/download (8).jpg,entrance,Traditional,5,187500
+entrance/download.jpg,entrance,Luxury,5,187500
+entrance/images.jpg,entrance,Luxury,5,187500
+floral/000001.jpg,floral,Luxury,5,237500
+floral/000002.jpg,floral,Traditional,5,237500
+floral/000003.jpg,floral,Traditional,5,237500
+floral/000004.jpg,floral,Traditional,5,237500
+floral/000005.jpg,floral,Luxury,5,237500
+floral/000006.jpg,floral,Luxury,5,237500
+floral/000007.jpg,floral,Luxury,5,237500
+floral/000008.jpg,floral,Luxury,5,237500
+floral/000009.jpg,floral,Luxury,5,237500
+floral/000010.jpg,floral,Luxury,5,237500
+floral/000011.jpg,floral,Luxury,5,237500
+floral/000012.jpg,floral,Luxury,5,237500
+floral/000013.jpg,floral,Traditional,5,237500
+floral/000014.jpg,floral,Luxury,5,237500
+floral/download (1).jpg,floral,Traditional,5,237500
+floral/download (2).jpg,floral,Traditional,5,237500
+floral/download (3).jpg,floral,Luxury,5,237500
+floral/download (4).jpg,floral,Luxury,5,237500
+floral/download (5).jpg,floral,Luxury,5,237500
+floral/download (6).jpg,floral,Traditional,5,237500
+floral/download (7).jpg,floral,Luxury,5,237500
+floral/download (9).jpg,floral,Traditional,5,237500
+floral/download.jpg,floral,Luxury,5,237500
+floral/images.jpg,floral,Luxury,5,237500
+mandap/000001.jpg,mandap,Luxury,5,1875000
+mandap/000002.jpg,mandap,Luxury,5,1875000
+mandap/000003.jpg,mandap,Luxury,5,1875000
+mandap/000004.jpg,mandap,Luxury,5,1875000
+mandap/000005.jpg,mandap,Luxury,5,1875000
+mandap/000006.jpg,mandap,Luxury,5,1875000
+mandap/000007.jpg,mandap,Luxury,5,1875000
+mandap/000008.jpg,mandap,Traditional,5,1875000
+mandap/000009.jpg,mandap,Luxury,5,1875000
+mandap/000010.jpg,mandap,Luxury,5,1875000
+mandap/000011.jpg,mandap,Traditional,5,1875000
+mandap/000012.jpg,mandap,Luxury,5,1875000
+mandap/000013.jpg,mandap,Luxury,5,1875000
+mandap/000014.jpg,mandap,Luxury,5,1875000
+mandap/000015.jpg,mandap,Luxury,5,1875000
+mandap/000016.jpg,mandap,Luxury,5,1875000
+mandap/000017.jpg,mandap,Luxury,5,1875000
+mandap/000018.jpg,mandap,Traditional,5,1875000
+mandap/000019.jpg,mandap,Traditional,5,1875000
+mandap/000020.jpg,mandap,Luxury,5,1875000
+mandap/000021.jpg,mandap,Luxury,5,1875000
+mandap/000022.jpg,mandap,Luxury,5,1875000
+mandap/000023.jpg,mandap,Luxury,5,1875000
+mandap/000024.jpg,mandap,Traditional,5,1875000
+mandap/000025.jpg,mandap,Luxury,5,1875000
+mandap/000026.jpg,mandap,Luxury,5,1875000
+mandap/000027.jpg,mandap,Luxury,5,1875000
+mandap/000028.jpg,mandap,Luxury,5,1875000
+mandap/000029.jpg,mandap,Luxury,5,1875000
+mandap/000030.jpg,mandap,Traditional,5,1875000
+mandap/000031.jpg,mandap,Luxury,5,1875000
+mandap/000032.jpg,mandap,Luxury,5,1875000
+mandap/000033.jpg,mandap,Luxury,5,1875000
+mandap/000034.jpg,mandap,Traditional,5,1875000
+mandap/000035.jpg,mandap,Luxury,5,1875000
+mandap/000036.jpg,mandap,Luxury,5,1875000
+mandap/000037.jpg,mandap,Luxury,5,1875000
+mandap/000038.jpg,mandap,Traditional,5,1875000
+mandap/000039.jpg,mandap,Luxury,5,1875000
+mandap/000040.jpg,mandap,Traditional,5,1875000
+mandap/decor_001.jpg,mandap,Luxury,5,1875000
+mandap/decor_002.jpg,mandap,Luxury,5,1875000
+mandap/download (1).jpg,mandap,Luxury,5,1875000
+mandap/download (2).jpg,mandap,Traditional,5,1875000
+mandap/download (3).jpg,mandap,Luxury,5,1875000
+mandap/download (4).jpg,mandap,Traditional,5,1875000
+mandap/download (5).jpg,mandap,Traditional,5,1875000
+mandap/download (6).jpg,mandap,Luxury,5,1875000
+mandap/download.jpg,mandap,Traditional,5,1875000
+mandap/images (1).jpg,mandap,Traditional,5,1875000
+mandap/images (2).jpg,mandap,Traditional,5,1875000
+mandap/images (3).jpg,mandap,Luxury,5,1875000
+mandap/images.jpg,mandap,Traditional,5,1875000
+reception/000001.jpg,reception,Luxury,5,150000
+reception/000002.jpg,reception,Luxury,5,150000
+reception/000003.jpg,reception,Luxury,5,150000
+reception/000004.jpg,reception,Luxury,5,150000
+reception/000005.jpg,reception,Luxury,5,150000
+reception/000006.jpg,reception,Luxury,5,150000
+reception/000007.jpg,reception,Luxury,5,150000
+reception/000008.jpg,reception,Luxury,5,150000
+reception/000009.jpg,reception,Luxury,5,150000
+reception/000010.jpg,reception,Traditional,5,150000
+reception/000011.jpg,reception,Luxury,5,150000
+reception/000012.jpg,reception,Luxury,5,150000
+reception/000013.jpg,reception,Luxury,5,150000
+reception/000014.jpg,reception,Traditional,5,150000
+reception/000015.jpg,reception,Luxury,5,150000
+reception/000016.jpg,reception,Luxury,5,150000
+reception/000017.jpg,reception,Traditional,4,105000
+reception/000018.jpg,reception,Luxury,5,150000
+reception/000019.jpg,reception,Traditional,5,150000
+reception/000020.jpg,reception,Modern,5,150000
+reception/000021.jpg,reception,Luxury,5,150000
+reception/000022.jpg,reception,Luxury,5,150000
+reception/000023.jpg,reception,Traditional,5,150000
+reception/000024.jpg,reception,Luxury,5,150000
+reception/000025.jpg,reception,Luxury,5,150000
+reception/000026.jpg,reception,Luxury,5,150000
+reception/000027.jpg,reception,Luxury,5,150000
+reception/000028.jpg,reception,Luxury,5,150000
+reception/000029.jpg,reception,Luxury,5,150000
+reception/000030.jpg,reception,Traditional,5,150000
+reception/000031.jpg,reception,Luxury,5,150000
+reception/download (8).jpg,reception,Traditional,5,150000
+reception/images (1).jpg,reception,Luxury,5,150000
+reception/images (2).jpg,reception,Traditional,5,150000
+reception/images (3).jpg,reception,Traditional,5,150000
+reception/images (4).jpg,reception,Traditional,5,150000
+reception/images (5).jpg,reception,Traditional,5,150000
+reception/images (6).jpg,reception,Traditional,5,150000
+reception/images (7).jpg,reception,Traditional,5,150000
+reception/images (8).jpg,reception,Traditional,5,150000
+reception/images.jpg,reception,Luxury,5,150000
+stage/000001.jpg,stage,Luxury,5,1000000
+stage/000002.jpg,stage,Luxury,5,1000000
+stage/000003.jpg,stage,Luxury,5,1000000
+stage/000004.jpg,stage,Traditional,5,1000000
+stage/000005.jpg,stage,Luxury,5,1000000
+stage/000006.jpg,stage,Luxury,5,1000000
+stage/000007.jpg,stage,Traditional,5,1000000
+stage/000008.jpg,stage,Luxury,5,1000000
+stage/000009.jpg,stage,Luxury,5,1000000
+stage/000010.jpg,stage,Luxury,5,1000000
+stage/000011.jpg,stage,Luxury,5,1000000
+stage/000012.jpg,stage,Luxury,5,1000000
+stage/000013.jpg,stage,Modern,5,1000000
+stage/000014.jpg,stage,Luxury,5,1000000
+stage/000015.jpg,stage,Luxury,5,1000000
+stage/000016.jpg,stage,Traditional,5,1000000
+stage/000017.jpg,stage,Luxury,5,1000000
+stage/000018.jpg,stage,Traditional,5,1000000
+stage/000019.jpg,stage,Luxury,5,1000000
+stage/000020.jpg,stage,Traditional,5,1000000
+stage/000021.jpg,stage,Luxury,5,1000000
+stage/000022.jpg,stage,Luxury,5,1000000
+stage/000023.jpg,stage,Luxury,5,1000000
+stage/000024.jpg,stage,Traditional,5,1000000
+stage/000025.jpg,stage,Traditional,5,1000000
+stage/000026.jpg,stage,Traditional,5,1000000
+stage/000027.jpg,stage,Luxury,5,1000000
+stage/000028.jpg,stage,Luxury,5,1000000
+stage/000029.jpg,stage,Luxury,5,1000000
+stage/000030.jpg,stage,Luxury,5,1000000
+stage/000031.jpg,stage,Luxury,5,1000000
+stage/000032.jpg,stage,Modern,5,1000000
+stage/000033.jpg,stage,Luxury,5,1000000
+stage/000034.jpg,stage,Luxury,5,1000000
+stage/000035.jpg,stage,Luxury,5,1000000
+stage/000036.jpg,stage,Luxury,5,1000000
+stage/000037.jpg,stage,Traditional,5,1000000
+stage/000038.jpg,stage,Luxury,5,1000000
+stage/000039.jpg,stage,Luxury,5,1000000
+stage/000040.jpg,stage,Traditional,5,1000000
+stage/000041.jpg,stage,Luxury,5,1000000
+stage/000042.jpg,stage,Luxury,5,1000000
+stage/000043.jpg,stage,Luxury,5,1000000
+stage/000044.jpg,stage,Traditional,5,1000000
+stage/000045.jpg,stage,Traditional,5,1000000
+stage/000046.jpg,stage,Traditional,5,1000000
+stage/000047.jpg,stage,Traditional,5,1000000
+stage/000048.jpg,stage,Luxury,5,1000000
+stage/000049.jpg,stage,Traditional,5,1000000
+stage/000050.jpg,stage,Luxury,5,1000000
+stage/download (1).jpg,stage,Traditional,5,1000000
+stage/download (2).jpg,stage,Traditional,5,1000000
+stage/download (3).jpg,stage,Traditional,5,1000000
+stage/download (4).jpg,stage,Luxury,5,1000000
+stage/download (5).jpg,stage,Luxury,5,1000000
+stage/download (6).jpg,stage,Traditional,5,1000000
+stage/download.jpg,stage,Luxury,5,1000000
+stage/images (1).jpg,stage,Luxury,5,1000000
+stage/images (2).jpg,stage,Traditional,5,1000000
+stage/images.jpg,stage,Luxury,5,1000000
+table/000001.jpg,table,Luxury,5,112500
+table/000002.jpg,table,Luxury,5,112500
+table/000003.jpg,table,Luxury,5,112500
+table/000004.jpg,table,Luxury,5,112500
+table/000005.jpg,table,Luxury,5,112500
+table/000006.jpg,table,Traditional,5,112500
+table/000007.jpg,table,Luxury,5,112500
+table/000008.jpg,table,Luxury,5,112500
+table/000009.jpg,table,Luxury,5,112500
+table/000010.jpg,table,Luxury,5,112500
+table/000011.jpg,table,Luxury,5,112500
+table/000012.jpg,table,Luxury,5,112500
+table/000013.jpg,table,Luxury,5,112500
+table/000014.jpg,table,Luxury,5,112500
+table/000015.jpg,table,Luxury,5,112500
+table/000016.jpg,table,Luxury,5,112500
+table/000017.jpg,table,Luxury,5,112500
+table/000018.jpg,table,Luxury,5,112500
+table/000019.jpg,table,Luxury,5,112500
+table/000020.jpg,table,Luxury,5,112500
+table/000021.jpg,table,Luxury,5,112500
+table/000022.jpg,table,Luxury,5,112500
+table/000023.jpg,table,Luxury,5,112500
+table/000024.jpg,table,Luxury,5,112500
+table/000025.jpg,table,Luxury,5,112500
+table/000026.jpg,table,Luxury,5,112500
+table/000027.jpg,table,Luxury,5,112500
+table/000028.jpg,table,Traditional,5,112500
+table/000029.jpg,table,Luxury,5,112500
+table/000030.jpg,table,Luxury,5,112500
+table/000031.jpg,table,Luxury,5,112500
+table/000032.jpg,table,Luxury,5,112500
+table/000033.jpg,table,Luxury,5,112500
+table/000034.jpg,table,Luxury,5,112500
+table/000035.jpg,table,Traditional,5,112500
+table/000036.jpg,table,Luxury,5,112500
+table/000037.jpg,table,Traditional,5,112500
+table/000038.jpg,table,Traditional,5,112500
+table/000039.jpg,table,Traditional,5,112500
+table/000040.jpg,table,Luxury,5,112500
+table/000041.jpg,table,Luxury,5,112500
+table/000042.jpg,table,Traditional,5,112500
+table/000043.jpg,table,Luxury,5,112500
+table/000044.jpg,table,Luxury,5,112500
+table/000045.jpg,table,Luxury,5,112500
+table/000046.jpg,table,Luxury,5,112500
+table/000047.jpg,table,Luxury,5,112500
+table/000048.jpg,table,Luxury,5,112500
+table/000049.jpg,table,Luxury,5,112500
+table/download (1).jpg,table,Luxury,5,112500
+table/download (2).jpg,table,Luxury,5,112500
+table/download (3).jpg,table,Traditional,5,112500
+table/download (4).jpg,table,Modern,5,112500
+table/download (5).jpg,table,Luxury,5,112500
+table/download (6).jpg,table,Traditional,5,112500
+table/download.jpg,table,Luxury,5,112500
+table/images (1).jpg,table,Luxury,5,112500
+table/images (2).jpg,table,Traditional,5,112500
+table/images (3).jpg,table,Luxury,5,112500
+table/images.jpg,table,Traditional,5,112500

@@ -482,6 +482,11 @@ function DecorLabelsTab() {
               <div style={{ background: '#f0f7fc', padding: '8px 12px', fontSize: 11, color: '#4a7a94', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {img.filename}
               </div>
+              <img
+                src={`http://localhost:8080/decor_images/${img.filename}`}
+                alt={img.filename}
+                style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}
+              />
               <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#555' }}>Function Type</label>

@@ -47,3 +47,12 @@ async def import_images():
         if inserted:
             import logging
             logging.info(f"import_images: inserted {inserted} new decor images")
+
+if __name__ == "__main__":
+    import asyncio
+    from database import init_db
+    async def main():
+        await init_db()
+        await import_images()
+        print("Done!")
+    asyncio.run(main())
