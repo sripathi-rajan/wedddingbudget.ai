@@ -1,11 +1,9 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from routers import wedding_config, budget, decor, food, artists, logistics, sundries, admin
 import uvicorn, os
-
-DECOR_IMAGES_DIR = os.path.join(os.path.dirname(__file__), "decor_dataset", "data", "images")
 
 
 @asynccontextmanager
@@ -67,19 +65,7 @@ app.include_router(logistics.router,      prefix="/api/logistics", tags=["Logist
 app.include_router(sundries.router,       prefix="/api/sundries",  tags=["Sundries"])
 app.include_router(admin.router,          prefix="/api/admin",     tags=["Admin"])
 
-@app.get("/decor-images/{filename:path}")
-def serve_decor_image(filename: str):
-    # filename may be "subfolder/image.jpg" or just "image.jpg"
-    # Search all subfolders if no subfolder prefix matches directly
-    candidate = os.path.join(DECOR_IMAGES_DIR, filename)
-    if os.path.isfile(candidate):
-        return FileResponse(candidate)
-    # fallback: search every subfolder
-    for subfolder in os.listdir(DECOR_IMAGES_DIR):
-        path = os.path.join(DECOR_IMAGES_DIR, subfolder, filename)
-        if os.path.isfile(path):
-            return FileResponse(path)
-    raise HTTPException(status_code=404, detail="Image not found")
+app.mount("/decor_images", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "..", "decor_dataset", "data", "images")), name="decor")
 
 
 @app.get("/")
@@ -98,7 +84,19 @@ def health():
         }
     except Exception:
         rl_info = {"rl_agent_loaded": False, "rl_total_samples": 0}
-    return {"status": "ok", **rl_info}
+
+    decor_info = {}
+    try:
+        from ml.decor_model import get_predictor
+        p = get_predictor()
+        decor_info = {
+            "decor_model_loaded":  p.model_mid is not None,
+            "decor_model_samples": p.n_samples,
+        }
+    except Exception:
+        decor_info = {"decor_model_loaded": False, "decor_model_samples": 0}
+
+    return {"status": "ok", **rl_info, **decor_info}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
