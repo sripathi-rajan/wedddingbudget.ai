@@ -361,30 +361,33 @@ export default function Tab3Decor() {
 
     try {
       setPredStep('Analysing decor attributes...')
-      const res = await fetch(`${API}/decor/predict`, {
+      const formData = new FormData()
+      formData.append('file', uploadedFile)
+      formData.append('function_type', uploadTag.function_type)
+      formData.append('style', uploadTag.style)
+      const complexityMap = { Low: 1, Medium: 3, High: 5 }
+      formData.append('complexity', complexityMap[uploadTag.complexity] ?? 3)
+      const res = await fetch(`${API}/decor/predict-upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          function_type: uploadTag.function_type,
-          complexity:    uploadTag.complexity,
-          style:         uploadTag.style,
-          image_seed:    Math.floor(Math.random() * 1000)
-        })
+        body: formData,
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const d = await res.json()
       if (d.error) throw new Error(d.error)
+      if (d.method === 'rejected') {
+        setImgRelevanceWarn('⚠️ Please upload a decoration image')
+        setPrediction(null)
+        setPredicting(false)
+        setPredStep('')
+        return
+      }
+      const mid = d.predicted_mid ?? d.predicted_cost
       setPrediction({
-        predicted_cost: d.predicted_cost,
-        range:          d.range || [Math.round(d.predicted_cost * 0.8), Math.round(d.predicted_cost * 1.25)],
+        predicted_cost: mid,
+        range:          [d.predicted_low ?? Math.round(mid * 0.8), d.predicted_high ?? Math.round(mid * 1.25)],
         confidence:     d.confidence,
-        similar_items:  (d.similar_items || []).map(s => ({
-          name:           s.name || s.function_type,
-          function_type:  s.function_type,
-          base_cost:      s.base_cost,
-          similarity_pct: s.similarity_pct
-        })),
-        source: d.source || 'AI Estimate'
+        similar_items:  [],
+        source: d.method === 'ml' ? 'RandomForest ML' : 'Rule-based'
       })
     } catch (err) {
       // Offline fallback
